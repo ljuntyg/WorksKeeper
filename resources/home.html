@@ -1,0 +1,16 @@
+<html>
+  <body>
+    <table>
+      <tr style="text-align: left">
+        <th>Time required</th>
+        <th>Title</th>
+      </tr>
+      {{range .}}
+      <tr>
+        <td>{{formatTime .GetTimeRequiredMinutes}}</td>
+        <td><a href={{.GetUrl}}>{{.Title}}</a></td>
+      </tr>
+      {{end}}
+    </table>
+  </body>
+</html>

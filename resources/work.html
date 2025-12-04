@@ -1,0 +1,8 @@
+<html>
+  <body> <!-- TODO: wrap content tags in <figure> with a <figcaption> inside -->
+    <h1>{{.GetTitle}}</h1>
+    {{range .Contents}}
+      {{.ToHTML}}
+    {{end}}
+  </body>
+</html>
