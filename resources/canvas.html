@@ -1,0 +1,42 @@
+<html>
+  <body>
+    <section>
+      {{range .Contents}}
+        {{.ToHTML}}
+
+        <form method="POST" style="display:inline;">
+          <input type="hidden" name="content-index" value="{{.GetIndex}}" />
+          <input type="hidden" name="work-id" value="{{$.GetId}}" />
+          <input type="hidden" name="action" value="move-up" />
+          <button type="submit">Move up</button>
+        </form>
+
+        <form method="POST" style="display:inline;">
+          <input type="hidden" name="content-index" value="{{.GetIndex}}" />
+          <input type="hidden" name="work-id" value="{{$.GetId}}" />
+          <input type="hidden" name="action" value="move-down" />
+          <button type="submit">Move down</button>
+        </form>
+
+        <form method="POST" style="display:inline;">
+          <input type="hidden" name="content-id" value="{{.GetId}}" />
+          <input type="hidden" name="work-id" value="{{$.GetId}}" />
+          <input type="hidden" name="action" value="delete-content" />
+          <button type="submit">Delete</button>
+        </form>
+
+      {{end}}
+    </section>
+    <aside>
+      <form method="POST" enctype="multipart/form-data">
+        <fieldset>
+          <legend>Canvas tools</legend>
+          <input type="file" name="upload" />
+          <input type="hidden" name="work-id" value="{{.GetId}}" />
+          <input type="hidden" name="action" value="upload" />
+          <button type="submit">Upload</button>
+        </fieldset>
+      </form>
+    </aside>  
+  </body>
+</html>
