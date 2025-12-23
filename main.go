@@ -13,68 +13,89 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
-	"sort"
 	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 )
 
 type Listing interface {
+	GetId() uuid.UUID
+	GetParentListing() Listing
 	GetTitle() string
 	GetTimeRequiredMinutes() int
 	GetUrl() string
-	GetId() uuid.UUID
+	GetTags() []*Tag
+	GetIsPublic() bool
+	String() string
 }
 
 type Series struct {
-	Title string
-	Works []Listing
-	Id    uuid.UUID
+	Id           uuid.UUID
+	ParentSeries *Series
+	Title        string
+	IsPublic     bool
+	Listings     []Listing
+	Tags         []*Tag
 }
 
 type Work struct {
-	Title    string
-	Length   int
-	Contents []Content
-	Id       uuid.UUID
+	Id           uuid.UUID
+	ParentSeries *Series
+	Title        string
+	Length       int
+	IsPublic     bool
+	Contents     []Content
+	Tags         []*Tag
+}
+
+type Tag struct {
+	Name   string
+	Values []string
 }
 
 // TODO: add GetCaption() method
 type Content interface {
+	GetId() uuid.UUID
+	GetWork() *Work
 	GetSourceUrls() []string
 	GetType() ContentType
 	ToHTML() template.HTML
 	GetIndex() int
 	GetCaption() string
-	GetId() uuid.UUID
 	SetIndex(idx int)
 }
 
 type Text struct {
+	Id    uuid.UUID
+	Work  *Work
 	Text  string
 	Index int
-	Id    uuid.UUID
 }
 
 type Sound struct {
+	Id         uuid.UUID
+	Work       *Work
 	SoundPaths []string
 	Index      int
 	Caption    string
-	Id         uuid.UUID
 }
 
 type Video struct {
+	Id         uuid.UUID
+	Work       *Work
 	VideoPaths []string
 	Index      int
 	Caption    string
-	Id         uuid.UUID
 }
 
 type Image struct {
+	Id         uuid.UUID
+	Work       *Work
 	ImagePaths []string
 	Index      int
 	Caption    string
-	Id         uuid.UUID
 }
 
 type ContentType int
@@ -125,13 +146,6 @@ var MimeToContentType = map[string]ContentType{
 
 const textTemplate = `<p>{{index .GetSourceUrls 0}}</p>`
 
-/* const soundTemplate = `<audio controls>
-	{{range .GetSourceUrls}}
-	<source src={{.}}>
-	{{end}}
-	Your browser doesn't support this audio.
-</audio>` */
-
 const soundTemplate = `<figure>
 	<audio controls>
 		{{range .GetSourceUrls}}
@@ -142,13 +156,6 @@ const soundTemplate = `<figure>
 	<figcaption>{{.GetCaption}}</figcaption>
 </figure>`
 
-/* const videoTemplate = `<video controls>
-	{{range .GetSourceUrls}}
-	<source src={{.}}>
-	{{end}}
-	Your browser doesn't support this video.
-</video>` */
-
 const videoTemplate = `<figure>
 	<video controls>
 		{{range .GetSourceUrls}}
@@ -158,8 +165,6 @@ const videoTemplate = `<figure>
 	</video>
 	<figcaption>{{.GetCaption}}</figcaption>
 </figure>`
-
-/* const imageTemplate = `<img src={{index .GetSourceUrls 0}} alt="Image">` */
 
 const imageTemplate = `<figure>
 	<img src={{index .GetSourceUrls 0}} alt="Image">
@@ -172,13 +177,21 @@ const imageTemplate = `<figure>
 //
 // \/\/\/\/\/\/\/\/\/\/\/\/\/\/
 
+func (s *Series) GetId() uuid.UUID {
+	return s.Id
+}
+
+func (s *Series) GetParentListing() Listing {
+	return s.ParentSeries
+}
+
 func (s *Series) GetTitle() string {
 	return s.Title
 }
 
 func (s *Series) GetTimeRequiredMinutes() int {
 	totalTime := 0
-	for _, elem := range s.Works {
+	for _, elem := range s.Listings {
 		totalTime += elem.GetTimeRequiredMinutes()
 	}
 
@@ -192,8 +205,36 @@ func (s *Series) GetUrl() string {
 	return getBaseUrl() + "/series/number/" + s.Id.String()
 }
 
-func (s *Series) GetId() uuid.UUID {
-	return s.Id
+func (s *Series) GetTags() []*Tag {
+	return s.Tags
+}
+
+func (s *Series) GetIsPublic() bool {
+	return s.IsPublic
+}
+
+func (s *Series) String() string {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "Series: %s\n", s.Title)
+
+	if len(s.Listings) != 0 {
+		b.WriteString("With Listings:\n")
+	}
+
+	for _, l := range s.Listings {
+		b.WriteString(l.String() + "\n")
+	}
+
+	return b.String()
+}
+
+func (w *Work) GetId() uuid.UUID {
+	return w.Id
+}
+
+func (w *Work) GetParentListing() Listing {
+	return w.ParentSeries
 }
 
 func (w *Work) GetTitle() string {
@@ -215,20 +256,16 @@ func (w *Work) GetUrl() string {
 	return getBaseUrl() + "/work/number/" + w.Id.String()
 }
 
-func (w *Work) GetId() uuid.UUID {
-	return w.Id
+func (w *Work) GetTags() []*Tag {
+	return w.Tags
 }
 
-// TODO:
-func (w *Work) addContent(c Content) {
-	w.Contents = append(w.Contents, c)
-	c.SetIndex(len(w.Contents) - 1)
+func (w *Work) GetIsPublic() bool {
+	return w.IsPublic
+}
 
-	sort.Slice(w.Contents, func(i, j int) bool {
-		return w.Contents[i].GetIndex() < w.Contents[j].GetIndex()
-	})
-
-	GetExistingMockDb().Contents[c.GetId()] = c
+func (w *Work) String() string {
+	return fmt.Sprintf("Work: %s", w.Title)
 }
 
 // ----------------------------
@@ -236,6 +273,14 @@ func (w *Work) addContent(c Content) {
 //	CONTENTS CONTENTS CONTENTS
 //
 // \/\/\/\/\/\/\/\/\/\/\/\/\/\/
+
+func (t *Text) GetId() uuid.UUID {
+	return t.Id
+}
+
+func (t *Text) GetWork() *Work {
+	return t.Work
+}
 
 func (t *Text) GetSourceUrls() []string {
 	return []string{t.Text}
@@ -264,12 +309,16 @@ func (t *Text) GetCaption() string {
 	return ""
 }
 
-func (t *Text) GetId() uuid.UUID {
-	return t.Id
-}
-
 func (t *Text) SetIndex(idx int) {
 	t.Index = idx
+}
+
+func (s *Sound) GetId() uuid.UUID {
+	return s.Id
+}
+
+func (s *Sound) GetWork() *Work {
+	return s.Work
 }
 
 func (s *Sound) GetSourceUrls() []string {
@@ -295,16 +344,20 @@ func (s *Sound) GetIndex() int {
 	return s.Index
 }
 
-func (s *Sound) GetId() uuid.UUID {
-	return s.Id
-}
-
 func (s *Sound) GetCaption() string {
 	return s.Caption
 }
 
 func (s *Sound) SetIndex(idx int) {
 	s.Index = idx
+}
+
+func (v *Video) GetWork() *Work {
+	return v.Work
+}
+
+func (v *Video) GetId() uuid.UUID {
+	return v.Id
 }
 
 func (v *Video) GetSourceUrls() []string {
@@ -334,12 +387,16 @@ func (v *Video) GetCaption() string {
 	return v.Caption
 }
 
-func (v *Video) GetId() uuid.UUID {
-	return v.Id
-}
-
 func (v *Video) SetIndex(idx int) {
 	v.Index = idx
+}
+
+func (i *Image) GetId() uuid.UUID {
+	return i.Id
+}
+
+func (i *Image) GetWork() *Work {
+	return i.Work
 }
 
 func (i *Image) GetSourceUrls() []string {
@@ -367,10 +424,6 @@ func (i *Image) GetIndex() int {
 
 func (i *Image) GetCaption() string {
 	return i.Caption
-}
-
-func (i *Image) GetId() uuid.UUID {
-	return i.Id
 }
 
 func (i *Image) SetIndex(idx int) {
@@ -477,8 +530,29 @@ func formatTimeRequired(min int) string {
 }
 
 // TODO:
-func addListing(l Listing) {
-	GetExistingMockDb().Listings[l.GetId()] = l
+func saveWork(w *Work) {
+	getMockDb().SaveWork(w)
+}
+
+// TODO:
+func saveSeries(s *Series) {
+	getMockDb().SaveSeries(s)
+}
+
+// TODO:
+func saveContent(c Content) {
+	switch c.GetType() {
+	case TextType:
+		getMockDb().SaveText(c.(*Text))
+	case SoundType:
+		getMockDb().SaveSound(c.(*Sound))
+	case VideoType:
+		getMockDb().SaveVideo(c.(*Video))
+	case ImageType:
+		getMockDb().SaveImage(c.(*Image))
+	default:
+		panic("unknown ContentType when saving content")
+	}
 }
 
 // TODO:
@@ -496,28 +570,28 @@ func createNewWork() *Work {
 		Id:     uuid.New(),
 	}
 
-	addListing(work)
+	saveWork(work)
 	return work
 }
 
 // TODO:
 func getWork(id uuid.UUID) *Work {
-	return GetExistingMockDb().GetWork(id)
+	return getMockDb().GetWork(id)
 }
 
 // TODO:
 func getSeries(id uuid.UUID) *Series {
-	return GetExistingMockDb().GetSeries(id)
+	return getMockDb().GetSeries(id)
 }
 
 // TODO:
 func getContent(id uuid.UUID) Content {
-	return GetExistingMockDb().Contents[id]
+	return getMockDb().Contents[id]
 }
 
 // TODO:
-func GetImage(id uuid.UUID) *Image {
-	return GetExistingMockDb().GetImage(id)
+func getImage(id uuid.UUID) *Image {
+	return getMockDb().GetImage(id)
 }
 
 func getUuidFromId(id string) uuid.UUID {
@@ -579,14 +653,14 @@ func handleContentUpload(r *http.Request, work *Work) error {
 		return err
 	}
 
-	work.addContent(content)
+	saveContent(content)
 
 	return nil
 }
 
 // TODO:
 func getAllListings() iter.Seq[Listing] {
-	return maps.Values(GetExistingMockDb().Listings)
+	return maps.Values(getMockDb().Listings)
 }
 
 // Assume Contents is always sorted by index
@@ -636,7 +710,7 @@ func deleteContent(w *Work, contentId uuid.UUID) {
 		w.Contents[i].SetIndex(i)
 	}
 
-	delete(GetExistingMockDb().Contents, contentId)
+	delete(getMockDb().Contents, contentId)
 }
 
 // ----------------------------
@@ -648,6 +722,15 @@ func deleteContent(w *Work, contentId uuid.UUID) {
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	templ := template.Must(template.New("home.html").Funcs(template.FuncMap{
 		"formatTime": formatTimeRequired,
+		"capitalize": func(s string) string {
+			if s == "" {
+				return s
+			}
+
+			r := []rune(s)
+			r[0] = unicode.ToUpper(r[0])
+			return string(r)
+		},
 	}).ParseFiles("./resources/home.html"))
 
 	listings := getAllListings()
@@ -673,6 +756,8 @@ func viewSeriesHandler(w http.ResponseWriter, r *http.Request) {
 	id := getUuidFromId(r.PathValue("id"))
 	series := getSeries(id)
 
+	log.Println("viewing series: " + series.String())
+
 	templ := template.Must(template.New("series.html").Funcs(template.FuncMap{
 		"formatTime": formatTimeRequired,
 	}).ParseFiles("./resources/series.html"))
@@ -693,7 +778,7 @@ func createWorkHandler(w http.ResponseWriter, r *http.Request) {
 
 func createWorkGetHandler(w http.ResponseWriter, r *http.Request) {
 	newWork := createNewWork()
-	addListing(newWork)
+	saveWork(newWork)
 
 	templ := template.Must(template.ParseFiles("./resources/canvas.html"))
 	templ.Execute(w, newWork)

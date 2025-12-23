@@ -3,63 +3,141 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
+	"time"
 
 	"github.com/google/uuid"
 )
 
+var mockDb = &WorksKeeperDB{
+	Listings: make(map[uuid.UUID]Listing),
+	Contents: make(map[uuid.UUID]Content),
+	Tags:     make(map[uuid.UUID]Tag),
+}
+
+var mockTags = map[string][]string{
+	"created-by": {
+		"Funny Duck",
+		"Slow Man",
+		"Rolling Chen",
+		"Coffee Monster",
+	},
+	"date-created": {
+		"2023-01-15",
+		"2023-06-03",
+		"2024-02-27",
+		"2025-01-10",
+	},
+	"length": {
+		"100",
+		"200",
+		"5000",
+	},
+	"language": {
+		"en",
+		"sv",
+		"ja",
+		"fr",
+	},
+	"media-types": {
+		"audio",
+		"video",
+		"text",
+		"image",
+	},
+}
+
+var mockTagNames []string
+
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+var currentWork = 0
+
+var maxNestedSeries = 2
+var maxWorkContents = 10
+var maxSeriesListings = 3
+var maxWorks = 3
+
 func init() {
 	log.Println("calling MOCK init()")
 
-	for _, l := range GetNMockListings(10) {
-		mockExistingDb.AddListing(l)
+	keys := make([]string, 0, len(mockTags))
+	for k := range mockTags {
+		keys = append(keys, k)
 	}
 
-	for _, c := range GetNMockContents(20) {
-		mockExistingDb.AddContent(c)
+	mockTagNames = keys
+
+	for range maxWorks / 3 {
+		mockDb.SaveSeries(getMockSeries())
+	}
+
+	for range 2 * maxWorks / 3 {
+		mockDb.SaveWork(getMockWork())
 	}
 }
 
 type Database interface {
-	AddContent(c Content)
-	AddListing(l Listing)
+	SaveWork(w *Work)
+	SaveSeries(s *Series)
+	SaveText(t *Text)
+	SaveSound(s *Sound)
+	SaveVideo(v *Video)
+	SaveImage(i *Image)
 
 	GetWork(id uuid.UUID) *Work
 	GetSeries(id uuid.UUID) *Series
 	GetText(id uuid.UUID) *Text
-	GetImage(id uuid.UUID) *Image
 	GetSound(id uuid.UUID) *Sound
 	GetVideo(id uuid.UUID) *Video
+	GetImage(id uuid.UUID) *Image
+
+	GetAllListings() []Listing
 }
 
 type WorksKeeperDB struct {
 	Listings map[uuid.UUID]Listing
 	Contents map[uuid.UUID]Content
+	Tags     map[uuid.UUID]Tag
 }
 
-var mockExistingDb = &WorksKeeperDB{
-	Listings: make(map[uuid.UUID]Listing),
-	Contents: make(map[uuid.UUID]Content),
+func (db *WorksKeeperDB) SaveWork(w *Work) {
+	db.Listings[w.GetId()] = w
+
+	for _, c := range w.Contents {
+		saveContent(c)
+	}
 }
 
-func (db *WorksKeeperDB) AddContent(c Content) {
-	db.Contents[c.GetId()] = c
-}
+func (db *WorksKeeperDB) SaveSeries(s *Series) {
+	db.Listings[s.GetId()] = s
 
-func (db *WorksKeeperDB) AddListing(l Listing) {
-	db.Listings[l.GetId()] = l
-
-	switch x := l.(type) {
-
-	case *Work:
-		for _, c := range x.Contents {
-			db.AddContent(c)
-		}
-
-	case *Series:
-		for _, item := range x.Works {
-			db.AddListing(item)
+	for _, l := range s.Listings {
+		switch l := l.(type) {
+		case *Work:
+			db.SaveWork(l)
+		case *Series:
+			db.SaveSeries(l)
+		default:
+			panic("unexpected Listing type when saving")
 		}
 	}
+}
+
+func (db *WorksKeeperDB) SaveText(t *Text) {
+	db.Contents[t.GetId()] = t
+}
+
+func (db *WorksKeeperDB) SaveSound(s *Sound) {
+	db.Contents[s.GetId()] = s
+}
+
+func (db *WorksKeeperDB) SaveVideo(v *Video) {
+	db.Contents[v.GetId()] = v
+}
+
+func (db *WorksKeeperDB) SaveImage(i *Image) {
+	db.Contents[i.GetId()] = i
 }
 
 func (db *WorksKeeperDB) GetWork(id uuid.UUID) *Work {
@@ -134,13 +212,13 @@ func (db *WorksKeeperDB) GetVideo(id uuid.UUID) *Video {
 	return video
 }
 
-func GetExistingMockDb() *WorksKeeperDB {
-	log.Println("calling MOCK GetExistingMockDb()")
+func getMockDb() *WorksKeeperDB {
+	log.Println("calling MOCK GetMockDb()")
 
-	return mockExistingDb
+	return mockDb
 }
 
-func GetMockText() *Text {
+func getMockText() *Text {
 	log.Println("calling MOCK GetMockText()")
 
 	return &Text{
@@ -149,7 +227,7 @@ func GetMockText() *Text {
 	}
 }
 
-func GetMockSound() *Sound {
+func getMockSound() *Sound {
 	log.Println("calling MOCK GetMockSound()")
 
 	return &Sound{
@@ -159,7 +237,7 @@ func GetMockSound() *Sound {
 	}
 }
 
-func GetMockVideo() *Video {
+func getMockVideo() *Video {
 	log.Println("calling MOCK GetMockVideo()")
 
 	return &Video{
@@ -169,7 +247,7 @@ func GetMockVideo() *Video {
 	}
 }
 
-func GetMockImage() *Image {
+func getMockImage() *Image {
 	log.Println("calling MOCK GetMockImage()")
 
 	return &Image{
@@ -179,29 +257,51 @@ func GetMockImage() *Image {
 	}
 }
 
-func GetMockWork(i int) *Work {
-	log.Println("calling MOCK GetMockWork()")
-
-	return &Work{
-		Title:  fmt.Sprintf("Mock work %d", i),
-		Length: 1030,
-		Contents: []Content{
-			GetMockText(),
-			GetMockSound(),
-			GetMockImage(),
-			GetMockVideo(),
-			GetMockText(),
-			GetMockText(),
-			GetMockText(),
-			GetMockVideo(),
-			GetMockVideo(),
-			GetMockImage(),
-		},
-		Id: uuid.New(),
+func (ct ContentType) getMock() Content {
+	switch ct {
+	case TextType:
+		return getMockText()
+	case SoundType:
+		return getMockSound()
+	case VideoType:
+		return getMockVideo()
+	case ImageType:
+		return getMockImage()
+	default:
+		panic("unexpected ContentType when getting mock")
 	}
 }
 
-func GetMockEmptyWork() *Work {
+func getMockContents() []Content {
+	n := maxWorkContents
+
+	contents := make([]Content, n)
+
+	for i := range n {
+		ct := AllContentTypes[rng.Intn(len(AllContentTypes))]
+
+		contents[i] = ct.getMock()
+	}
+
+	return contents
+}
+
+func getMockWork() *Work {
+	log.Println("calling MOCK GetMockWork()")
+
+	currentWork++
+
+	return &Work{
+		Title:    fmt.Sprintf("Mock work #%d", currentWork),
+		Length:   1030,
+		Contents: getMockContents(),
+		Id:       uuid.New(),
+		Tags:     getMockTags(),
+		IsPublic: true,
+	}
+}
+
+func getMockEmptyWork() *Work {
 	log.Println("calling MOCK GetMockEmptyWork()")
 
 	return &Work{
@@ -212,69 +312,85 @@ func GetMockEmptyWork() *Work {
 	}
 }
 
-func GetNonNestedMockSeries(i int) *Series {
-	log.Println("calling MOCK GetNonNestedMockSeries()")
+var nestedSeries = 0
 
-	return &Series{
-		Title: fmt.Sprintf("Mock series #%d", i),
-		Works: []Listing{
-			GetMockWork(30),
-		},
-		Id: uuid.New(),
-	}
-}
-
-func GetMockSeries(i int) *Series {
-	log.Println("calling MOCK GetMockSeries()")
-
-	return &Series{
-		Title: fmt.Sprintf("Mock series #%d", i),
-		Works: []Listing{
-			GetMockWork(1),
-			GetMockWork(2),
-			GetNonNestedMockSeries(29),
-		},
-		Id: uuid.New(),
-	}
-}
-
-func GetNMockListings(n int) []Listing {
-	log.Println("calling MOCK GetNMockListings()")
-
-	list := make([]Listing, 0, n)
-
-	for j := range n {
-		i := j + 1
-		if i%3 == 0 {
-			list = append(list, GetMockSeries(i))
-		} else {
-			list = append(list, GetMockWork(i))
-		}
-	}
-
-	return list
-}
-
-func GetNMockContents(n int) []Content {
-	log.Println("calling MOCK GetNMockContents()")
-
-	contents := make([]Content, 0, n)
+func getMockListings(n int) []Listing {
+	listings := make([]Listing, n)
 
 	for i := range n {
-		switch i % 4 {
-		case 0:
-			contents = append(contents, GetMockText())
-		case 1:
-			contents = append(contents, GetMockSound())
-		case 2:
-			contents = append(contents, GetMockImage())
-		case 3:
-			contents = append(contents, GetMockVideo())
+		randVal := rng.Intn(3)
+
+		if randVal > 0 || maxNestedSeries-nestedSeries <= 0 {
+			listings[i] = getMockWork()
+		} else {
+			nestedSeries++
+			listings[i] = getMockSeries()
 		}
 	}
 
-	return contents
+	nestedSeries = 0
+
+	return listings
 }
+
+func getMockSeries() *Series {
+	log.Println("calling MOCK GetMockSeries()")
+
+	currentWork++
+
+	return &Series{
+		Title:    fmt.Sprintf("Mock series #%d", currentWork),
+		Listings: getMockListings(maxSeriesListings),
+		Id:       uuid.New(),
+		Tags:     getMockTags(),
+		IsPublic: true,
+	}
+}
+
+func getMockTags() []*Tag {
+	log.Println("calling MOCK GetMockTags()")
+
+	n1 := rng.Intn(len(mockTagNames)-1) + 1
+	n := rng.Intn(n1)
+	tags := make([]*Tag, n)
+
+	for i := range n {
+		tags[i] = getMockTag()
+	}
+
+	return tags
+}
+
+func pickRandomValues(values []string, min, max int) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	n := min + rng.Intn(max-min+1)
+	if n > len(values) {
+		n = len(values)
+	}
+
+	perm := rng.Perm(len(values))
+	out := make([]string, 0, n)
+
+	for i := 0; i < n; i++ {
+		out = append(out, values[perm[i]])
+	}
+
+	return out
+}
+
+func getMockTag() *Tag {
+	name := mockTagNames[rng.Intn(len(mockTagNames))]
+	possibleValues := mockTags[name]
+
+	return &Tag{
+		Name:   name,
+		Values: pickRandomValues(possibleValues, 1, 3),
+	}
+}
+
 func GetMockBaseUrl() string {
 	log.Println("calling MOCK GetMockBaseUrl()")
 

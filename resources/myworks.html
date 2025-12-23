@@ -1,17 +1,20 @@
 <html>
   <body>
+
     <a href="/submit/work">Create work</a>
+
     <table>
       <tr style="text-align: left">
         <th>Time required</th>
         <th>Title</th>
       </tr>
-      {{range .}}
+      {{ range . }}
       <tr>
-        <td>{{formatTime .GetTimeRequiredMinutes}}</td>
-        <td><a href="{{.GetUrl}}">{{.Title}}</a></td>
+        <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
+        <td><a href="{{ .GetUrl }}">{{ .Title }}</a></td>
       </tr>
-      {{end}}
+      {{ end }}
     </table>
+    
   </body>
 </html>
