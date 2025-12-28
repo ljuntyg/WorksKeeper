@@ -33,3 +33,5 @@ go.work.sum
 
 ## AND ##
 resources/media/*/*
+notes.md
+nginx.conf

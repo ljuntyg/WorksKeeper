@@ -1,0 +1,55 @@
+<html>
+  <body>
+    
+    <table>
+      <tr style="text-align: left">
+        <th>Time required</th>
+        <th>Title</th>
+      </tr>
+      {{ range .Data }}
+      <tr>
+        <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
+        <td><a href="{{ .GetUrl }}">{{ .Title }}</a></td>
+      </tr>
+      {{ end }}
+    </table>
+
+    <aside>
+      <form method="POST">
+        <fieldset>
+          <legend>Search tools</legend>
+
+          <fieldset>
+            <ul>
+              <!-- list already added filters -->
+              {{ with .Data2 }}
+                {{ range .Tags }}
+                  {{ .ToHtml }}
+                {{ end }}
+              {{ end }}
+
+              <li>
+                <select name="filter-tag">
+                  {{ range .Environment.AllTags }}
+                  <option value="{{ .Name }}">
+                    {{ .Name }}
+                  </option>
+                  {{ end }}
+                </select>
+
+                <button type="submit" name="action" value="add-filter">
+                  Add filter
+                </button>
+              </li>
+            </ul>
+          </fieldset>
+
+          <button type="submit" name="action" value="search" >
+            Search
+          </button>
+        </fieldset>
+      </form>
+    </aside>
+
+  </body>
+</html>

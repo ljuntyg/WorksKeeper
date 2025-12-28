@@ -2,41 +2,20 @@
   <body>
 
     <a href="/compose/work">Submit work</a>
+    <a href="/search/works">Search works</a>
 
     <table>
       <tr style="text-align: left">
         <th>Time required</th>
         <th>Title</th>
       </tr>
-      {{ range . }}
+      {{ range .Data }}
       <tr>
         <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
         <td><a href="{{ .GetUrl }}">{{ .Title }}</a></td>
       </tr>
       {{ end }}
     </table>
-
-    <aside>
-      <form method="POST">
-        <fieldset>
-
-          <legend>Search tools</legend>
-
-          <fieldset>
-            <select name="tag">
-              <option value="country">
-                Sweden
-              </option>
-            </select>
-            
-            <button type="submit" formaction="/add-filter">Add filter</button>
-          </fieldset>
-
-          <button type="submit">Search</button>
-
-        </fieldset>
-      </form>
-    </aside>
 
   </body>
 </html>

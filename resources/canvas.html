@@ -5,7 +5,7 @@
 
     <section>
       {{ range .Contents }}
-        {{ .ToHTML }}
+        {{ .ToHtml }}
 
         <form method="POST" style="display:inline;">
           <input type="hidden" name="content-index" value="{{ .GetIndex }}" />

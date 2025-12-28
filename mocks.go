@@ -3,55 +3,60 @@ package main
 import (
 	"fmt"
 	"log"
+	"maps"
 	"math/rand"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 var mockDb = &WorksKeeperDB{
-	Listings: make(map[uuid.UUID]Listing),
-	Contents: make(map[uuid.UUID]Content),
+	Listings: make(map[uuid.UUID]Listable),
+	Contents: make(map[uuid.UUID]Contentable),
 	Tags:     make(map[uuid.UUID]Tag),
+	Filters:  make(map[Numbering]*Filter),
 }
 
-var mockTags = map[string][]string{
-	"created-by": {
-		"Funny Duck",
-		"Slow Man",
-		"Rolling Chen",
-		"Coffee Monster",
-	},
-	"date-created": {
-		"2023-01-15",
-		"2023-06-03",
-		"2024-02-27",
-		"2025-01-10",
-	},
-	"length": {
-		"100",
-		"200",
-		"5000",
-	},
-	"language": {
-		"en",
-		"sv",
-		"ja",
-		"fr",
-	},
-	"media-types": {
-		"audio",
-		"video",
-		"text",
-		"image",
-	},
+var mockTags = []*Tag{
+	// author
+	{Name: "author", Value: "Funny Duck", FilterMode: ""},
+	{Name: "author", Value: "Slow Man", FilterMode: ""},
+	{Name: "author", Value: "Rolling Chen", FilterMode: ""},
+	{Name: "author", Value: "Coffee Monster", FilterMode: ""},
+
+	// date
+	{Name: "date", Value: "2023-01-15", FilterMode: ""},
+	{Name: "date", Value: "2023-06-03", FilterMode: ""},
+	{Name: "date", Value: "2024-02-27", FilterMode: ""},
+	{Name: "date", Value: "2025-01-10", FilterMode: ""},
+
+	// length
+	{Name: "length", Value: "100", FilterMode: ""},
+	{Name: "length", Value: "200", FilterMode: ""},
+	{Name: "length", Value: "5000", FilterMode: ""},
+
+	// language
+	{Name: "language", Value: "en", FilterMode: ""},
+	{Name: "language", Value: "sv", FilterMode: ""},
+	{Name: "language", Value: "ja", FilterMode: ""},
+	{Name: "language", Value: "fr", FilterMode: ""},
+
+	// media
+	{Name: "media", Value: "audio", FilterMode: ""},
+	{Name: "media", Value: "video", FilterMode: ""},
+	{Name: "media", Value: "text", FilterMode: ""},
+	{Name: "media", Value: "image", FilterMode: ""},
 }
 
+var mockTagValues map[string]*TagValues
 var mockTagNames []string
+var mockHtmlEnvironment *HtmlEnvironment
 
 var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 var currentWork = 0
+var currentFilter = 0
 
 var maxNestedSeries = 2
 var maxWorkContents = 10
@@ -61,12 +66,14 @@ var maxWorks = 3
 func init() {
 	log.Println("calling MOCK init()")
 
-	keys := make([]string, 0, len(mockTags))
-	for k := range mockTags {
-		keys = append(keys, k)
+	mockTagNames = make([]string, len(mockTags))
+	for i, tag := range mockTags {
+		mockTagNames[i] = tag.Name
 	}
 
-	mockTagNames = keys
+	mockHtmlEnvironment = &HtmlEnvironment{
+		AllTags: initMockTagValues(),
+	}
 
 	for range maxWorks / 3 {
 		mockDb.SaveSeries(getMockSeries())
@@ -77,6 +84,35 @@ func init() {
 	}
 }
 
+func initMockTagValues() []*TagValues {
+	tagValuesMap := make(map[string]*TagValues)
+
+	for _, tag := range mockTags {
+		tv, exists := tagValuesMap[tag.Name]
+		if !exists {
+			var filterModes []string
+			switch tag.Name {
+			case "length":
+				filterModes = []string{"is", "below", "above"}
+			case "date":
+				filterModes = []string{"is", "before", "after"}
+			}
+
+			tv = &TagValues{
+				Name:        tag.Name,
+				Values:      []string{},
+				FilterModes: filterModes,
+			}
+			tagValuesMap[tag.Name] = tv
+		}
+		tv.Values = append(tv.Values, tag.Value)
+	}
+
+	mockTagValues = tagValuesMap
+
+	return slices.Collect(maps.Values(tagValuesMap))
+}
+
 type Database interface {
 	SaveWork(w *Work)
 	SaveSeries(s *Series)
@@ -84,6 +120,7 @@ type Database interface {
 	SaveSound(s *Sound)
 	SaveVideo(v *Video)
 	SaveImage(i *Image)
+	SaveFilter(f *Filter)
 
 	GetWork(id uuid.UUID) *Work
 	GetSeries(id uuid.UUID) *Series
@@ -91,14 +128,16 @@ type Database interface {
 	GetSound(id uuid.UUID) *Sound
 	GetVideo(id uuid.UUID) *Video
 	GetImage(id uuid.UUID) *Image
+	GetFilter(numbering Numbering) *Filter
 
-	GetAllListings() []Listing
+	GetAllListings() []Listable
 }
 
 type WorksKeeperDB struct {
-	Listings map[uuid.UUID]Listing
-	Contents map[uuid.UUID]Content
+	Listings map[uuid.UUID]Listable
+	Contents map[uuid.UUID]Contentable
 	Tags     map[uuid.UUID]Tag
+	Filters  map[Numbering]*Filter
 }
 
 func (db *WorksKeeperDB) SaveWork(w *Work) {
@@ -138,6 +177,10 @@ func (db *WorksKeeperDB) SaveVideo(v *Video) {
 
 func (db *WorksKeeperDB) SaveImage(i *Image) {
 	db.Contents[i.GetId()] = i
+}
+
+func (db *WorksKeeperDB) SaveFilter(f *Filter) {
+	db.Filters[f.Numbering] = f
 }
 
 func (db *WorksKeeperDB) GetWork(id uuid.UUID) *Work {
@@ -212,75 +255,94 @@ func (db *WorksKeeperDB) GetVideo(id uuid.UUID) *Video {
 	return video
 }
 
+func (db *WorksKeeperDB) GetFilter(numbering Numbering) *Filter {
+	f, ok := db.Filters[numbering]
+	if !ok {
+		panic("GetFilter: no content with that numbering")
+	}
+
+	return f
+}
+
+func getMockTagValues(t *Tag) *TagValues {
+	log.Println("calling MOCK getMockTagValues()")
+
+	return mockTagValues[t.Name]
+}
+
 func getMockDb() *WorksKeeperDB {
 	log.Println("calling MOCK GetMockDb()")
 
 	return mockDb
 }
 
-func getMockText() *Text {
+func getMockText(idx int) *Text {
 	log.Println("calling MOCK GetMockText()")
 
 	return &Text{
-		Text: "Mock text!",
-		Id:   uuid.New(),
+		Text:  "Mock text!",
+		Id:    uuid.New(),
+		Index: idx,
 	}
 }
 
-func getMockSound() *Sound {
+func getMockSound(idx int) *Sound {
 	log.Println("calling MOCK GetMockSound()")
 
 	return &Sound{
-		SoundPaths: []string{getBaseUrl() + SoundType.urlPrefix() + "609562_migfus20_background-music.ogg"},
+		SoundPaths: []string{getBaseUrl() + ContentSoundType.urlPrefix() + "609562_migfus20_background-music.ogg"},
 		Caption:    "Sound caption",
 		Id:         uuid.New(),
+		Index:      idx,
 	}
 }
 
-func getMockVideo() *Video {
+func getMockVideo(idx int) *Video {
 	log.Println("calling MOCK GetMockVideo()")
 
 	return &Video{
-		VideoPaths: []string{getBaseUrl() + VideoType.urlPrefix() + "14044733_1080_1920_48fps(2).mp4"},
+		VideoPaths: []string{getBaseUrl() + ContentVideoType.urlPrefix() + "14044733_1080_1920_48fps(2).mp4"},
 		Caption:    "Testing a video caption",
 		Id:         uuid.New(),
+		Index:      idx,
 	}
 }
 
-func getMockImage() *Image {
+func getMockImage(idx int) *Image {
 	log.Println("calling MOCK GetMockImage()")
 
 	return &Image{
-		ImagePaths: []string{getBaseUrl() + ImageType.urlPrefix() + "IMG20250819173509~2.jpg"},
+		ImagePaths: []string{getBaseUrl() + ContentImageType.urlPrefix() + "IMG20250819173509~2.jpg"},
 		Caption:    "An image caption",
 		Id:         uuid.New(),
+		Index:      idx,
 	}
 }
 
-func (ct ContentType) getMock() Content {
+func (ct ContentType) getMock(idx int) Contentable {
 	switch ct {
-	case TextType:
-		return getMockText()
-	case SoundType:
-		return getMockSound()
-	case VideoType:
-		return getMockVideo()
-	case ImageType:
-		return getMockImage()
+	case ContentTextType:
+		return getMockText(idx)
+	case ContentSoundType:
+		return getMockSound(idx)
+	case ContentVideoType:
+		return getMockVideo(idx)
+	case ContentImageType:
+		return getMockImage(idx)
 	default:
 		panic("unexpected ContentType when getting mock")
 	}
 }
 
-func getMockContents() []Content {
+func getMockContents() []Contentable {
 	n := maxWorkContents
 
-	contents := make([]Content, n)
+	contents := make([]Contentable, n)
 
 	for i := range n {
 		ct := AllContentTypes[rng.Intn(len(AllContentTypes))]
 
-		contents[i] = ct.getMock()
+		contents[i] = ct.getMock(i)
 	}
 
 	return contents
@@ -307,15 +369,15 @@ func getMockEmptyWork() *Work {
 	return &Work{
 		Title:    "Untitled",
 		Length:   0,
-		Contents: []Content{},
+		Contents: []Contentable{},
 		Id:       uuid.New(),
 	}
 }
 
 var nestedSeries = 0
 
-func getMockListings(n int) []Listing {
-	listings := make([]Listing, n)
+func getMockListings(n int) []Listable {
+	listings := make([]Listable, n)
 
 	for i := range n {
 		randVal := rng.Intn(3)
@@ -325,6 +387,10 @@ func getMockListings(n int) []Listing {
 		} else {
 			nestedSeries++
 			listings[i] = getMockSeries()
+		}
+
+		if listings[i] == nil {
+			log.Println("NIL listing created")
 		}
 	}
 
@@ -347,6 +413,34 @@ func getMockSeries() *Series {
 	}
 }
 
+func getMockNumbering(typeCounter *int) Numbering {
+	*typeCounter++
+
+	timestamp := time.Now()
+	year := timestamp.Year()
+
+	century := year/100 + 1
+	centuryYear := year % 100
+	day := timestamp.YearDay()
+
+	return Numbering{
+		Century: century,
+		Year:    centuryYear,
+		Day:     day,
+		Serial:  *typeCounter,
+	}
+}
+
+func getMockFilter() *Filter {
+	log.Println("calling MOCK getMockFilter()")
+
+	return &Filter{
+		Id:        uuid.New(),
+		Numbering: getMockNumbering(&currentFilter),
+		Tags:      getMockTags(),
+	}
+}
+
 func getMockTags() []*Tag {
 	log.Println("calling MOCK GetMockTags()")
 
@@ -361,38 +455,35 @@ func getMockTags() []*Tag {
 	return tags
 }
 
-func pickRandomValues(values []string, min, max int) []string {
-	if len(values) == 0 {
-		return nil
-	}
-
-	n := min + rng.Intn(max-min+1)
-	if n > len(values) {
-		n = len(values)
-	}
-
-	perm := rng.Perm(len(values))
-	out := make([]string, 0, n)
-
-	for i := 0; i < n; i++ {
-		out = append(out, values[perm[i]])
-	}
-
-	return out
-}
-
 func getMockTag() *Tag {
-	name := mockTagNames[rng.Intn(len(mockTagNames))]
-	possibleValues := mockTags[name]
-
-	return &Tag{
-		Name:   name,
-		Values: pickRandomValues(possibleValues, 1, 3),
-	}
+	return mockTags[rng.Intn(len(mockTags))]
 }
 
-func GetMockBaseUrl() string {
+func getMockProtocol() string {
+	log.Println("calling MOCK getMockProtocol()")
+
+	return "http://"
+}
+
+func getMockHost() string {
+	log.Println("calling MOCK getMockHost()")
+
+	return "localhost"
+}
+
+func getMockPort() string {
+	log.Println("calling MOCK getMockPort()")
+
+	return ":8080"
+}
+
+func getMockBaseUrl() string {
 	log.Println("calling MOCK GetMockBaseUrl()")
 
-	return "http://localhost:8080"
+	return getMockProtocol() + getMockHost() + getMockPort()
+}
+
+func getMockHtmlEnvironment() *HtmlEnvironment {
+	log.Println("calling MOCK getMockHtmlEnvironment()")
+	return mockHtmlEnvironment
 }
