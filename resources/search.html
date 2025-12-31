@@ -1,12 +1,14 @@
 <html>
   <body>
+
+    <!-- ListablesFilter is passed in as Data -->
     
     <table>
       <tr style="text-align: left">
         <th>Time required</th>
         <th>Title</th>
       </tr>
-      {{ range .Data }}
+      {{ range .Data.Listables }}
       <tr>
         <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
         <td><a href="{{ .GetUrl }}">{{ .Title }}</a></td>
@@ -15,38 +17,70 @@
     </table>
 
     <aside>
-      <form method="POST">
+      <form method="post">
         <fieldset>
-          <legend>Search tools</legend>
+          <legend>
+            <button type="submit" name="action" value="search:">
+              Search
+            </button>
 
-          <fieldset>
-            <ul>
-              <!-- list already added filters -->
-              {{ with .Data2 }}
-                {{ range .Tags }}
-                  {{ .ToHtml }}
-                {{ end }}
-              {{ end }}
+            works
 
-              <li>
-                <select name="filter-tag">
-                  {{ range .Environment.AllTags }}
-                  <option value="{{ .Name }}">
-                    {{ .Name }}
-                  </option>
-                  {{ end }}
-                </select>
+            <select name="filter-visibility">
+              <option value="filter-private" 
+                {{ if eq "filter-private" $.Data.Filter.FilterVisibility }}selected{{ end }}>
+                privately
+              </option>
+              <option value="filter-public"
+                {{ if eq "filter-public" $.Data.Filter.FilterVisibility }}selected{{ end }}>
+                publicly
+              </option>
+            </select>
+          </legend>
 
-                <button type="submit" name="action" value="add-filter">
-                  Add filter
-                </button>
-              </li>
-            </ul>
-          </fieldset>
-
-          <button type="submit" name="action" value="search" >
-            Search
+          <button type="submit" name="action" value="add-filter:">
+            &
           </button>
+
+          with
+
+          <select name="filter-tag">
+            {{ range .Environment.AllTags }}
+            <option value="{{ .Name }}"
+              {{ if eq .Name $.Data.Filter.PreviousTag }}selected{{ end }}>
+              {{ .Name }}
+            </option>
+            {{ end }}
+          </select>
+
+          <ul>
+            <!-- list already added filters -->
+            {{ with .Data.Filter }}
+
+              <!-- TODO: use Id for tags instead -->
+              {{ $globalIdx := 0 }}
+
+              {{ range .FilterGroups }}
+
+              <fieldset>
+                <legend>{{ .Name }}</legend>
+                
+                {{ range .Tags  }}
+                <li>
+                  {{ .ToHtml }}
+                  
+                  <button type="submit" name="action" value="remove-filter:{{ $globalIdx }}">
+                    ✕
+                  </button>
+                </li>
+
+                {{ $globalIdx = add $globalIdx 1 }}
+                {{ end }}
+              </fieldset>
+
+              {{ end }}
+            {{ end }}
+          </ul>
         </fieldset>
       </form>
     </aside>

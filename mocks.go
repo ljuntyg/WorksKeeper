@@ -12,7 +12,7 @@ import (
 )
 
 var mockDb = &WorksKeeperDB{
-	Listings: make(map[uuid.UUID]Listable),
+	Listings: make(map[Numbering]Listable),
 	Contents: make(map[uuid.UUID]Contentable),
 	Tags:     make(map[uuid.UUID]Tag),
 	Filters:  make(map[Numbering]*Filter),
@@ -20,33 +20,33 @@ var mockDb = &WorksKeeperDB{
 
 var mockTags = []*Tag{
 	// author
-	{Name: "author", Value: "Funny Duck", FilterMode: ""},
-	{Name: "author", Value: "Slow Man", FilterMode: ""},
-	{Name: "author", Value: "Rolling Chen", FilterMode: ""},
-	{Name: "author", Value: "Coffee Monster", FilterMode: ""},
+	{Id: uuid.New(), Name: "author", Value: "Funny Duck", FilterMode: ""},
+	{Id: uuid.New(), Name: "author", Value: "Slow Man", FilterMode: ""},
+	{Id: uuid.New(), Name: "author", Value: "Rolling Chen", FilterMode: ""},
+	{Id: uuid.New(), Name: "author", Value: "Coffee Monster", FilterMode: ""},
 
 	// date
-	{Name: "date", Value: "2023-01-15", FilterMode: ""},
-	{Name: "date", Value: "2023-06-03", FilterMode: ""},
-	{Name: "date", Value: "2024-02-27", FilterMode: ""},
-	{Name: "date", Value: "2025-01-10", FilterMode: ""},
+	{Id: uuid.New(), Name: "date", Value: "2023-01-15", FilterMode: ""},
+	{Id: uuid.New(), Name: "date", Value: "2023-06-03", FilterMode: ""},
+	{Id: uuid.New(), Name: "date", Value: "2024-02-27", FilterMode: ""},
+	{Id: uuid.New(), Name: "date", Value: "2025-01-10", FilterMode: ""},
 
 	// length
-	{Name: "length", Value: "100", FilterMode: ""},
-	{Name: "length", Value: "200", FilterMode: ""},
-	{Name: "length", Value: "5000", FilterMode: ""},
+	{Id: uuid.New(), Name: "length", Value: "100", FilterMode: ""},
+	{Id: uuid.New(), Name: "length", Value: "200", FilterMode: ""},
+	{Id: uuid.New(), Name: "length", Value: "5000", FilterMode: ""},
 
 	// language
-	{Name: "language", Value: "en", FilterMode: ""},
-	{Name: "language", Value: "sv", FilterMode: ""},
-	{Name: "language", Value: "ja", FilterMode: ""},
-	{Name: "language", Value: "fr", FilterMode: ""},
+	{Id: uuid.New(), Name: "language", Value: "en", FilterMode: ""},
+	{Id: uuid.New(), Name: "language", Value: "sv", FilterMode: ""},
+	{Id: uuid.New(), Name: "language", Value: "ja", FilterMode: ""},
+	{Id: uuid.New(), Name: "language", Value: "fr", FilterMode: ""},
 
 	// media
-	{Name: "media", Value: "audio", FilterMode: ""},
-	{Name: "media", Value: "video", FilterMode: ""},
-	{Name: "media", Value: "text", FilterMode: ""},
-	{Name: "media", Value: "image", FilterMode: ""},
+	{Id: uuid.New(), Name: "media", Value: "audio", FilterMode: ""},
+	{Id: uuid.New(), Name: "media", Value: "video", FilterMode: ""},
+	{Id: uuid.New(), Name: "media", Value: "text", FilterMode: ""},
+	{Id: uuid.New(), Name: "media", Value: "image", FilterMode: ""},
 }
 
 var mockTagValues map[string]*TagValues
@@ -56,6 +56,7 @@ var mockHtmlEnvironment *HtmlEnvironment
 var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 var currentWork = 0
+var currentSeries = 0
 var currentFilter = 0
 
 var maxNestedSeries = 2
@@ -93,19 +94,20 @@ func initMockTagValues() []*TagValues {
 			var filterModes []string
 			switch tag.Name {
 			case "length":
-				filterModes = []string{"is", "below", "above"}
+				filterModes = []string{"exactly", "below", "above"}
 			case "date":
-				filterModes = []string{"is", "before", "after"}
+				filterModes = []string{"exactly", "before", "after"}
 			}
 
 			tv = &TagValues{
-				Name:        tag.Name,
-				Values:      []string{},
-				FilterModes: filterModes,
+				Name:                  tag.Name,
+				PossibleValues:        []string{},
+				PossibleModeModifiers: []string{"being", "not being"},
+				PossibleFilterModes:   filterModes,
 			}
 			tagValuesMap[tag.Name] = tv
 		}
-		tv.Values = append(tv.Values, tag.Value)
+		tv.PossibleValues = append(tv.PossibleValues, tag.Value)
 	}
 
 	mockTagValues = tagValuesMap
@@ -134,14 +136,14 @@ type Database interface {
 }
 
 type WorksKeeperDB struct {
-	Listings map[uuid.UUID]Listable
+	Listings map[Numbering]Listable
 	Contents map[uuid.UUID]Contentable
 	Tags     map[uuid.UUID]Tag
 	Filters  map[Numbering]*Filter
 }
 
 func (db *WorksKeeperDB) SaveWork(w *Work) {
-	db.Listings[w.GetId()] = w
+	db.Listings[w.GetNumbering()] = w
 
 	for _, c := range w.Contents {
 		saveContent(c)
@@ -149,7 +151,7 @@ func (db *WorksKeeperDB) SaveWork(w *Work) {
 }
 
 func (db *WorksKeeperDB) SaveSeries(s *Series) {
-	db.Listings[s.GetId()] = s
+	db.Listings[s.GetNumbering()] = s
 
 	for _, l := range s.Listings {
 		switch l := l.(type) {
@@ -183,8 +185,8 @@ func (db *WorksKeeperDB) SaveFilter(f *Filter) {
 	db.Filters[f.Numbering] = f
 }
 
-func (db *WorksKeeperDB) GetWork(id uuid.UUID) *Work {
-	v, ok := db.Listings[id]
+func (db *WorksKeeperDB) GetWork(numbering Numbering) *Work {
+	v, ok := db.Listings[numbering]
 	if !ok {
 		panic("GetWork: no listing with that ID")
 	}
@@ -195,8 +197,8 @@ func (db *WorksKeeperDB) GetWork(id uuid.UUID) *Work {
 	return w
 }
 
-func (db *WorksKeeperDB) GetSeries(id uuid.UUID) *Series {
-	v, ok := db.Listings[id]
+func (db *WorksKeeperDB) GetSeries(numbering Numbering) *Series {
+	v, ok := db.Listings[numbering]
 	if !ok {
 		panic("GetSeries: no listing with that ID")
 	}
@@ -354,12 +356,13 @@ func getMockWork() *Work {
 	currentWork++
 
 	return &Work{
-		Title:    fmt.Sprintf("Mock work #%d", currentWork),
-		Length:   1030,
-		Contents: getMockContents(),
-		Id:       uuid.New(),
-		Tags:     getMockTags(),
-		IsPublic: true,
+		Title:     fmt.Sprintf("Mock work #%d", currentWork),
+		Length:    1030,
+		Contents:  getMockContents(),
+		Id:        uuid.New(),
+		Numbering: getMockNumbering(&currentWork),
+		Tags:      getMockTags(),
+		IsPublic:  true,
 	}
 }
 
@@ -367,10 +370,11 @@ func getMockEmptyWork() *Work {
 	log.Println("calling MOCK GetMockEmptyWork()")
 
 	return &Work{
-		Title:    "Untitled",
-		Length:   0,
-		Contents: []Contentable{},
-		Id:       uuid.New(),
+		Title:     "Untitled",
+		Length:    0,
+		Contents:  []Contentable{},
+		Id:        uuid.New(),
+		Numbering: getMockNumbering(&currentWork),
 	}
 }
 
@@ -402,14 +406,15 @@ func getMockListings(n int) []Listable {
 func getMockSeries() *Series {
 	log.Println("calling MOCK GetMockSeries()")
 
-	currentWork++
+	currentSeries++
 
 	return &Series{
-		Title:    fmt.Sprintf("Mock series #%d", currentWork),
-		Listings: getMockListings(maxSeriesListings),
-		Id:       uuid.New(),
-		Tags:     getMockTags(),
-		IsPublic: true,
+		Title:     fmt.Sprintf("Mock series #%d", currentSeries),
+		Listings:  getMockListings(maxSeriesListings),
+		Id:        uuid.New(),
+		Numbering: getMockNumbering(&currentSeries),
+		Tags:      getMockTags(),
+		IsPublic:  true,
 	}
 }
 
@@ -435,9 +440,9 @@ func getMockFilter() *Filter {
 	log.Println("calling MOCK getMockFilter()")
 
 	return &Filter{
-		Id:        uuid.New(),
-		Numbering: getMockNumbering(&currentFilter),
-		Tags:      getMockTags(),
+		Id:           uuid.New(),
+		Numbering:    getMockNumbering(&currentFilter),
+		FilterGroups: createFilterGroupsFromTags(getMockTags()),
 	}
 }
 
@@ -456,7 +461,21 @@ func getMockTags() []*Tag {
 }
 
 func getMockTag() *Tag {
+	log.Println("calling MOCK getMockTag()")
+
 	return mockTags[rng.Intn(len(mockTags))]
+}
+
+func getMockTagOf(name string) *Tag {
+	log.Println("calling MOCK getMockTagOf()")
+
+	for _, tag := range mockTags {
+		if tag.Name == name {
+			return tag
+		}
+	}
+
+	return nil
 }
 
 func getMockProtocol() string {

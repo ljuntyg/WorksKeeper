@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"maps"
-	"math/rand/v2"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -27,11 +26,21 @@ type HtmlEnvironment struct {
 type TemplateData[T, V any] struct {
 	Environment *HtmlEnvironment
 	Data        T
-	Data2       V
+}
+
+type Numberable interface {
+	GetNumberingUrlString() string
+}
+
+type Numbering struct {
+	Century, Year, Day int
+	Serial             int
+	Random             int
 }
 
 type Listable interface {
 	GetId() uuid.UUID
+	GetNumbering() Numbering
 	GetParentListing() Listable
 	GetTitle() string
 	GetTimeRequiredMinutes() int
@@ -43,61 +52,64 @@ type Listable interface {
 
 type Series struct {
 	Id           uuid.UUID
+	Numbering    Numbering
 	ParentSeries *Series
 	Title        string
 	IsPublic     bool
-	Listings     []Listable // Go only
-	Tags         []*Tag     // Go only?
+	Listings     []Listable
+	Tags         []*Tag
 }
 
 type Work struct {
 	Id           uuid.UUID
+	Numbering    Numbering
 	ParentSeries *Series
 	Title        string
 	Length       int
 	IsPublic     bool
-	Contents     []Contentable // Go only
-	Tags         []*Tag        // Go only?
+	Contents     []Contentable
+	Tags         []*Tag
 }
 
-type Numberable interface {
-	GetNumberingUrlString() string
+type FilterGroup struct {
+	Name string
+	Tags []*Tag
 }
 
 type Filter struct {
-	Id        uuid.UUID
-	Numbering Numbering
-	Tags      []*Tag
-}
-
-type Numbering struct {
-	Century, Year, Day int
-	Serial             int
-	Random             int
+	Id               uuid.UUID
+	Numbering        Numbering
+	FilterGroups     []*FilterGroup
+	FilterVisibility string
+	PreviousTag      string // Name of previous Tag added to the filter, or "" if a Tag was removed or none have been added
 }
 
 type Tag struct {
-	Name       string
-	Value      string
-	FilterMode string
+	Id           uuid.UUID
+	Name         string
+	Value        string
+	ModeModifier string
+	FilterMode   string
 }
 
 type TagValues struct {
-	Name        string
-	Values      []string
-	FilterModes []string
+	Name                  string
+	PossibleValues        []string
+	PossibleModeModifiers []string
+	PossibleFilterModes   []string
 }
 
-// TODO: add GetCaption() method
 type Contentable interface {
 	GetId() uuid.UUID
 	GetWork() *Work
-	GetSourceUrls() []string
+	GetSources() []string
 	GetType() ContentType
 	ToHtml() template.HTML
 	GetIndex() int
 	GetCaption() string
+	GetHtmlTemplateString() string
 	SetIndex(idx int)
+	SetSources(sources []string)
 }
 
 type Text struct {
@@ -140,141 +152,6 @@ const (
 	ContentImageType
 )
 
-var AllContentTypes = []ContentType{
-	ContentTextType,
-	ContentSoundType,
-	ContentVideoType,
-	ContentImageType,
-}
-
-var MimeToContentType = map[string]ContentType{
-	"image/apng":      ContentImageType,
-	"image/avif":      ContentImageType,
-	"image/bmp":       ContentImageType,
-	"image/gif":       ContentImageType,
-	"image/jpeg":      ContentImageType,
-	"image/png":       ContentImageType,
-	"image/svg+xml":   ContentImageType,
-	"image/tiff":      ContentImageType,
-	"image/webp":      ContentImageType,
-	"audio/aac":       ContentSoundType,
-	"audio/midi":      ContentSoundType,
-	"audio/x-midi":    ContentSoundType,
-	"audio/mpeg":      ContentSoundType,
-	"audio/ogg":       ContentSoundType,
-	"audio/wav":       ContentSoundType,
-	"audio/webm":      ContentSoundType,
-	"audio/3gpp":      ContentSoundType,
-	"audio/3gpp2":     ContentSoundType,
-	"application/ogg": ContentSoundType, // TODO: ? some .ogg files
-	"video/mp4":       ContentVideoType,
-	"video/mpeg":      ContentVideoType,
-	"video/ogg":       ContentVideoType,
-	"video/webm":      ContentVideoType,
-	"video/x-msvideo": ContentVideoType,
-	"video/mp2t":      ContentVideoType,
-	"video/3gpp":      ContentVideoType,
-	"video/3gpp2":     ContentVideoType,
-}
-
-const textTemplate = `<p>{{index .GetSourceUrls 0}}</p>`
-
-const soundTemplate = `<figure>
-	<audio controls>
-		{{range .GetSourceUrls}}
-		<source src={{.}}>
-		{{end}}
-		Your browser doesn't support this audio.
-	</audio>
-	<figcaption>{{.GetCaption}}</figcaption>
-</figure>`
-
-const videoTemplate = `<figure>
-	<video controls>
-		{{range .GetSourceUrls}}
-		<source src={{.}}>
-		{{end}}
-		Your browser doesn't support this video.
-	</video>
-	<figcaption>{{.GetCaption}}</figcaption>
-</figure>`
-
-const imageTemplate = `<figure>
-	<img src={{index .GetSourceUrls 0}} alt="Image">
-	<figcaption>{{.GetCaption}}</figcaption>
-</figure>`
-
-const tagDatalistTemplate = `<li>
-	{{ .Name }}
-
-	<datalist id="tag-values">
-		{{ range .Values }}
-		<option value="{{ . }}"></option>
-		{{ end }}
-	</datalist>
-	
-	<input list="tag-values" name="added-filters.value" id="added-filters.value" />
-	<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
-	<input type="hidden" name="filter-mode" value="" />
-	<!-- TODO: add remove button, search button -->
-</li>`
-
-const tagDateTemplate = `<li>
-	{{ .Name }}
-
-	<select name="filter-mode">
-		{{ range .FilterModes }}
-		<option value="{{ . }}">
-		{{ . }}
-		</option>
-		{{ end }}
-	</select>
-
-	<input type="date" id="added-filters.value" name="added-filters.value" />
-
-	<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
-	<!-- TODO: add remove button, search button -->
-</li>`
-
-const tagLengthTemplate = `<li>
-	{{ .Name }}
-
-	<select name="filter-mode">
-		{{ range .FilterModes }}
-		<option value="{{ . }}">
-		{{ . }}
-		</option>
-		{{ end }}
-	</select>
-
-	<!-- assumes .Values for a length tag is a slice of ordered values (with min and max) -->
-	<datalist id="length-datalist">
-		{{ range .Values }}
-		<option value="{{ . }}" label="{{ . }}" ></option>
-		{{ end }}
-	</datalist>
-
-	<input type="range" list="length-datalist" id="added-filters.value" name="added-filters.value" />
-	<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
-	<!-- TODO: add remove button, search button -->
-</li>`
-
-const tagMediaTemplate = `<li>
-	{{ .Name }}
-
-	<select name="added-filters.value">
-		{{ range .Values }}
-		<option value="{{ . }}">
-		{{ . }}
-		</option>
-		{{ end }}
-	</select>
-
-	<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
-	<input type="hidden" name="filter-mode" value="" />
-	<!-- TODO: add remove button, search button -->
-</li>`
-
 // ----------------------------
 //
 //	LISTINGS LISTINGS LISTINGS
@@ -283,6 +160,10 @@ const tagMediaTemplate = `<li>
 
 func (s *Series) GetId() uuid.UUID {
 	return s.Id
+}
+
+func (s *Series) GetNumbering() Numbering {
+	return s.Numbering
 }
 
 func (s *Series) GetParentListing() Listable {
@@ -306,7 +187,7 @@ func (s *Series) GetTimeRequiredMinutes() int {
 func (s *Series) GetUrl() string {
 	log.Println("calling MOCK GetUrl()")
 
-	return /* getBaseUrl() +  */ "/series/number/" + s.Id.String()
+	return "/series/" + s.GetNumberingUrlString()
 }
 
 func (s *Series) GetTags() []*Tag {
@@ -333,8 +214,21 @@ func (s *Series) String() string {
 	return b.String()
 }
 
+// TODO: add random
+func (s *Series) GetNumberingUrlString() string {
+	centuryString := fmt.Sprintf("%d%s", s.Numbering.Century, getEnglishNumberSuffix(s.Numbering.Century))
+	yearString := fmt.Sprintf("%d%s", s.Numbering.Year, getEnglishNumberSuffix(s.Numbering.Year))
+	dayString := fmt.Sprintf("%d%s", s.Numbering.Day, getEnglishNumberSuffix(s.Numbering.Day))
+
+	return fmt.Sprintf("/%d/of/%s/century/%s/year/%s/day", s.Numbering.Serial, centuryString, yearString, dayString)
+}
+
 func (w *Work) GetId() uuid.UUID {
 	return w.Id
+}
+
+func (w *Work) GetNumbering() Numbering {
+	return w.Numbering
 }
 
 func (w *Work) GetParentListing() Listable {
@@ -356,8 +250,7 @@ func (w *Work) GetTimeRequiredMinutes() int {
 func (w *Work) GetUrl() string {
 	log.Println("calling MOCK GetUrl()")
 
-	// TODO: the returned URL should be a sudbomain, the proxy will reverse it
-	return /* getBaseUrl() + */ "/work/number/" + w.Id.String()
+	return "/work/" + w.GetNumberingUrlString()
 }
 
 func (w *Work) GetTags() []*Tag {
@@ -370,6 +263,15 @@ func (w *Work) GetIsPublic() bool {
 
 func (w *Work) String() string {
 	return fmt.Sprintf("Work: %s", w.Title)
+}
+
+// TODO: add random
+func (w *Work) GetNumberingUrlString() string {
+	centuryString := fmt.Sprintf("%d%s", w.Numbering.Century, getEnglishNumberSuffix(w.Numbering.Century))
+	yearString := fmt.Sprintf("%d%s", w.Numbering.Year, getEnglishNumberSuffix(w.Numbering.Year))
+	dayString := fmt.Sprintf("%d%s", w.Numbering.Day, getEnglishNumberSuffix(w.Numbering.Day))
+
+	return fmt.Sprintf("/%d/of/%s/century/%s/year/%s/day", w.Numbering.Serial, centuryString, yearString, dayString)
 }
 
 // ----------------------------------------
@@ -386,34 +288,168 @@ func (f *Filter) GetNumberingUrlString() string {
 	return fmt.Sprintf("/%d/of/%s/century/%s/year/%s/day", f.Numbering.Serial, centuryString, yearString, dayString)
 }
 
-// TODO:
 func (t *Tag) ToHtml() template.HTML {
+	return t.filterTagToHtmlTemplate()
+}
+
+// TODO:
+func (t *Tag) GetPossibleValues() []string {
+	return getMockTagValues(t).PossibleValues
+}
+
+// TODO:
+func (t *Tag) GetPossibleModeModifiers() []string {
+	return getMockTagValues(t).PossibleModeModifiers
+}
+
+// TODO:
+func (t *Tag) GetPossibleFilterModes() []string {
+	return getMockTagValues(t).PossibleFilterModes
+}
+
+// TODO:
+func (t *Tag) getHtmlTemplateString() string {
 	switch t.Name {
 	case "author":
-		return toHtmlTemplate(tagDatalistTemplate, "author", t.getPossibleValues())
+		return tagDatalistTemplate
 	case "date":
-		return toHtmlTemplate(tagDateTemplate, "date", t.getPossibleValues())
+		return tagDateTemplate
 	case "length":
-		return toHtmlTemplate(tagLengthTemplate, "length", t.getPossibleValues())
+		return tagLengthTemplate
 	case "language":
-		return toHtmlTemplate(tagDatalistTemplate, "language", t.getPossibleValues())
+		return tagDatalistTemplate
 	case "media":
-		return toHtmlTemplate(tagMediaTemplate, "media", t.getPossibleValues())
+		return tagMediaTemplate
 	default:
-		panic("not implemented")
+		panic("getHtmlTemplateString() not fully implemented")
 		// TODO
 		/* return toHtmlTemplate(tagTextTemplate, "default", nil) */
 	}
 }
 
-// TODO:
-func (t *Tag) getPossibleValues() *TagValues {
-	return getMockTagValues(t)
+func (t *Tag) filterTagToHtmlTemplate() template.HTML {
+	log.Printf("tag %s to html template, possible values: %v", t.Name, t.GetPossibleValues())
+
+	tmpl := template.Must(template.New(t.Name).Parse(t.getHtmlTemplateString()))
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, t); err != nil {
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", t.Name))
+	}
+
+	return template.HTML(buf.String())
 }
 
-func (t *Tag) getFilterModes() []string {
-	return t.getPossibleValues().FilterModes
-}
+const tagDatalistTemplate = `<datalist id="tag-values-{{ .Name }}">
+	{{ range .GetPossibleValues }}
+	<option value="{{ . }}"></option>
+	{{ end }}
+</datalist>
+
+<select name="mode-modifier">
+	{{ range .GetPossibleModeModifiers}}
+	<option value="{{ . }}"
+		{{ if eq . $.ModeModifier }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<input 
+	list="tag-values-{{ .Name }}" 
+	name="added-filters.value" 
+	value="{{ .Value }}"
+/>
+
+<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
+<input type="hidden" name="filter-mode" value="" />
+<!-- TODO: add remove button, search button -->`
+
+const tagDateTemplate = `
+<select name="mode-modifier">
+	{{ range .GetPossibleModeModifiers}}
+	<option value="{{ . }}"
+		{{ if eq . $.ModeModifier }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<select name="filter-mode">
+	{{ range .GetPossibleFilterModes }}
+	<option value="{{ . }}"
+		{{ if eq . $.FilterMode }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<input 
+	type="date"  
+	name="added-filters.value" 
+	value="{{ .Value }}"
+/>
+
+<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
+<!-- TODO: add remove button, search button -->`
+
+const tagLengthTemplate = `
+<select name="mode-modifier">
+	{{ range .GetPossibleModeModifiers}}
+	<option value="{{ . }}"
+		{{ if eq . $.FilterMode }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<select name="filter-mode">
+	{{ range .GetPossibleFilterModes }}
+	<option value="{{ . }}"
+		{{ if eq . $.FilterMode }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<!-- assumes .PossibleValues for a length tag is a slice of ordered values (with min and max) -->
+<datalist id="length-datalist">
+	{{ range .GetPossibleValues }}
+	<option value="{{ . }}"></option>
+	{{ end }}
+</datalist>
+
+<input 
+	type="range" 
+	list="length-datalist" 
+	name="added-filters.value" 
+	value="{{ .Value }}"	
+/>
+
+<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
+<!-- TODO: add remove button, search button -->`
+
+const tagMediaTemplate = `<select name="mode-modifier">
+	{{ range .GetPossibleModeModifiers}}
+	<option value="{{ . }}"
+		{{ if eq . $.FilterMode }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<select name="added-filters.value">
+	{{ range .GetPossibleValues }}
+	<option value="{{ . }}"
+		{{ if eq . $.Value }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
+<input type="hidden" name="filter-mode" value="" />
+<!-- TODO: add remove button, search button -->`
 
 // ----------------------------
 //
@@ -429,7 +465,7 @@ func (t *Text) GetWork() *Work {
 	return t.Work
 }
 
-func (t *Text) GetSourceUrls() []string {
+func (t *Text) GetSources() []string {
 	return []string{t.Text}
 }
 
@@ -438,7 +474,7 @@ func (t *Text) GetType() ContentType {
 }
 
 func (t *Text) ToHtml() template.HTML {
-	return toHtmlTemplate(textTemplate, "text", t)
+	return contentToHtmlTemplate(t)
 }
 
 func (t *Text) GetIndex() int {
@@ -449,8 +485,16 @@ func (t *Text) GetCaption() string {
 	return ""
 }
 
+func (t *Text) GetHtmlTemplateString() string {
+	return textTemplate
+}
+
 func (t *Text) SetIndex(idx int) {
 	t.Index = idx
+}
+
+func (t *Text) SetSources(sources []string) {
+	t.Text = sources[0]
 }
 
 func (s *Sound) GetId() uuid.UUID {
@@ -461,7 +505,7 @@ func (s *Sound) GetWork() *Work {
 	return s.Work
 }
 
-func (s *Sound) GetSourceUrls() []string {
+func (s *Sound) GetSources() []string {
 	return s.SoundPaths
 }
 
@@ -470,7 +514,7 @@ func (s *Sound) GetType() ContentType {
 }
 
 func (s *Sound) ToHtml() template.HTML {
-	return toHtmlTemplate(soundTemplate, "sound", s)
+	return contentToHtmlTemplate(s)
 }
 
 func (s *Sound) GetIndex() int {
@@ -481,8 +525,16 @@ func (s *Sound) GetCaption() string {
 	return s.Caption
 }
 
+func (s *Sound) GetHtmlTemplateString() string {
+	return soundTemplate
+}
+
 func (s *Sound) SetIndex(idx int) {
 	s.Index = idx
+}
+
+func (s *Sound) SetSources(sources []string) {
+	s.SoundPaths = sources
 }
 
 func (v *Video) GetWork() *Work {
@@ -493,7 +545,7 @@ func (v *Video) GetId() uuid.UUID {
 	return v.Id
 }
 
-func (v *Video) GetSourceUrls() []string {
+func (v *Video) GetSources() []string {
 	return v.VideoPaths
 }
 
@@ -502,7 +554,7 @@ func (v *Video) GetType() ContentType {
 }
 
 func (v *Video) ToHtml() template.HTML {
-	return toHtmlTemplate(videoTemplate, "video", v)
+	return contentToHtmlTemplate(v)
 }
 
 func (v *Video) GetIndex() int {
@@ -513,8 +565,16 @@ func (v *Video) GetCaption() string {
 	return v.Caption
 }
 
+func (v *Video) GetHtmlTemplateString() string {
+	return videoTemplate
+}
+
 func (v *Video) SetIndex(idx int) {
 	v.Index = idx
+}
+
+func (v *Video) SetSources(sources []string) {
+	v.VideoPaths = sources
 }
 
 func (i *Image) GetId() uuid.UUID {
@@ -525,7 +585,7 @@ func (i *Image) GetWork() *Work {
 	return i.Work
 }
 
-func (i *Image) GetSourceUrls() []string {
+func (i *Image) GetSources() []string {
 	return i.ImagePaths
 }
 
@@ -534,7 +594,7 @@ func (i *Image) GetType() ContentType {
 }
 
 func (i *Image) ToHtml() template.HTML {
-	return toHtmlTemplate(imageTemplate, "image", i)
+	return contentToHtmlTemplate(i)
 }
 
 func (i *Image) GetIndex() int {
@@ -545,9 +605,55 @@ func (i *Image) GetCaption() string {
 	return i.Caption
 }
 
+func (i *Image) GetHtmlTemplateString() string {
+	return imageTemplate
+}
+
 func (i *Image) SetIndex(idx int) {
 	i.Index = idx
 }
+
+func (i *Image) SetSources(sources []string) {
+	i.ImagePaths = sources
+}
+
+func contentToHtmlTemplate(c Contentable) template.HTML {
+	tmpl := template.Must(template.New(c.GetType().SingularString()).Parse(c.GetHtmlTemplateString()))
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, c); err != nil {
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", c.GetType().SingularString()))
+	}
+
+	return template.HTML(buf.String())
+}
+
+const textTemplate = `{{index .GetSources 0}}`
+
+const soundTemplate = `<figure>
+	<audio controls>
+		{{range .GetSources}}
+		<source src={{.}}>
+		{{end}}
+		Your browser doesn't support this audio.
+	</audio>
+	<figcaption>{{.GetCaption}}</figcaption>
+</figure>`
+
+const videoTemplate = `<figure>
+	<video controls>
+		{{range .GetSources}}
+		<source src={{.}}>
+		{{end}}
+		Your browser doesn't support this video.
+	</video>
+	<figcaption>{{.GetCaption}}</figcaption>
+</figure>`
+
+const imageTemplate = `<figure>
+	<img src={{index .GetSources 0}} alt="Image">
+	<figcaption>{{.GetCaption}}</figcaption>
+</figure>`
 
 // --------------------------------------
 //
@@ -555,6 +661,7 @@ func (i *Image) SetIndex(idx int) {
 //
 // \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 
+// Careful changing this, html templates might use this to check type
 func (ct ContentType) String() string {
 	switch ct {
 	case ContentTextType:
@@ -570,6 +677,7 @@ func (ct ContentType) String() string {
 	}
 }
 
+// Careful changing this, html templates might use this to check type
 func (ct ContentType) SingularString() string {
 	str := ct.String()
 	if str[len(str)-1:] == "s" {
@@ -630,6 +738,43 @@ func (ct ContentType) createNew(sources []string) Contentable {
 	default:
 		panic("unknown ContentType when creating empty")
 	}
+}
+
+var AllContentTypes = []ContentType{
+	ContentTextType,
+	ContentSoundType,
+	ContentVideoType,
+	ContentImageType,
+}
+
+var MimeToContentType = map[string]ContentType{
+	"image/apng":      ContentImageType,
+	"image/avif":      ContentImageType,
+	"image/bmp":       ContentImageType,
+	"image/gif":       ContentImageType,
+	"image/jpeg":      ContentImageType,
+	"image/png":       ContentImageType,
+	"image/svg+xml":   ContentImageType,
+	"image/tiff":      ContentImageType,
+	"image/webp":      ContentImageType,
+	"audio/aac":       ContentSoundType,
+	"audio/midi":      ContentSoundType,
+	"audio/x-midi":    ContentSoundType,
+	"audio/mpeg":      ContentSoundType,
+	"audio/ogg":       ContentSoundType,
+	"audio/wav":       ContentSoundType,
+	"audio/webm":      ContentSoundType,
+	"audio/3gpp":      ContentSoundType,
+	"audio/3gpp2":     ContentSoundType,
+	"application/ogg": ContentSoundType, // TODO: ? some .ogg files
+	"video/mp4":       ContentVideoType,
+	"video/mpeg":      ContentVideoType,
+	"video/ogg":       ContentVideoType,
+	"video/webm":      ContentVideoType,
+	"video/x-msvideo": ContentVideoType,
+	"video/mp2t":      ContentVideoType,
+	"video/3gpp":      ContentVideoType,
+	"video/3gpp2":     ContentVideoType,
 }
 
 // --------------------------
@@ -702,26 +847,17 @@ func getBaseUrl() string {
 
 // TODO:
 func createNewWork() *Work {
-	log.Println("calling MOCK createNewWork()")
-
-	work := &Work{
-		Title:  strconv.Itoa(rand.IntN(100)),
-		Length: rand.IntN(100),
-		Id:     uuid.New(),
-	}
-
-	saveWork(work)
-	return work
+	return getMockEmptyWork()
 }
 
 // TODO:
-func getWork(id uuid.UUID) *Work {
-	return getMockDb().GetWork(id)
+func getWork(numbering Numbering) *Work {
+	return getMockDb().GetWork(numbering)
 }
 
 // TODO:
-func getSeries(id uuid.UUID) *Series {
-	return getMockDb().GetSeries(id)
+func getSeries(numbering Numbering) *Series {
+	return getMockDb().GetSeries(numbering)
 }
 
 // TODO:
@@ -764,7 +900,6 @@ func getFileContentType(file multipart.File) (ContentType, bool) {
 func storeUploadedFormFile(r *http.Request) (Contentable, error) {
 	file, header, err := r.FormFile("upload")
 	if err != nil {
-		log.Println(err)
 		return nil, err
 	} else {
 		ct, validCt := getFileContentType(file)
@@ -871,26 +1006,28 @@ func createTemplateData[T any, V []any](data T) TemplateData[T, V] {
 	}
 }
 
-func createTemplateDataWithData2[T, V any](data T, data2 V) TemplateData[T, V] {
-	return TemplateData[T, V]{
-		Environment: getHtmlEnvironment(),
-		Data:        data,
-		Data2:       data2,
-	}
-}
-
 // Request must be made to path matched by pattern like
 // /foo/boo/goo/{id} and id must refer to an existing work
 func getWorkFromRequest(r *http.Request) *Work {
-	id := getUuidFromId(r.PathValue("id"))
-	return getWork(id)
+	numberingString := r.PathValue("numbering")
+	numbering, err := urlStringToNumbering(numberingString)
+	if err != nil {
+		panic("unexpected error parsing numbering for work")
+	}
+
+	return getWork(numbering)
 }
 
 // Request must be made to path matched by pattern like
 // /foo/boo/goo/{id} and id must refer to an existing series
 func getSeriesFromRequest(r *http.Request) *Series {
-	id := getUuidFromId(r.PathValue("id"))
-	return getSeries(id)
+	numberingString := r.PathValue("numbering")
+	numbering, err := urlStringToNumbering(numberingString)
+	if err != nil {
+		panic("unexpected error parsing numbering for series")
+	}
+
+	return getSeries(numbering)
 }
 
 // TODO:
@@ -898,7 +1035,7 @@ func getNewFilter() *Filter {
 	return getMockFilter()
 }
 
-// TODO:
+// TODO: for each Numberable?
 func urlStringToNumbering(s string) (Numbering, error) {
 	// 1/of/21st/century/25th/year/362nd/day
 	parts := strings.Split(s, "/")
@@ -934,19 +1071,68 @@ func urlStringToNumbering(s string) (Numbering, error) {
 	}, nil
 }
 
+// TODO:
 func getFilterByNumbering(numbering Numbering) *Filter {
 	return getMockDb().GetFilter(numbering)
 }
 
-func toHtmlTemplate[T any](templateString string, name string, data T) template.HTML {
-	tmpl := template.Must(template.New(name).Parse(templateString))
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		panic(fmt.Sprintf("unexpected error executing %s HTML template", name))
+// Assumes all inputs (which should be buttons) with name "action" are of the format
+// "action-name: value"
+func extractActionAndValueFromRequest(r *http.Request) (string, string) {
+	actionString := r.FormValue("action")
+	action, value, found := strings.Cut(actionString, ":")
+	if !found {
+		panic("unexpected action name when handling action")
 	}
 
-	return template.HTML(buf.String())
+	return action, value
+}
+
+// Assumes post request made to search
+func extractTagsFromRequest(r *http.Request) []*Tag {
+	err := r.ParseForm()
+	if err != nil {
+		panic("unexpected error parsing form")
+	}
+
+	existingFilterTags := r.Form["added-filters.tag"]
+	existingFilterValues := r.Form["added-filters.value"]
+	existingFilterModifiers := r.Form["mode-modifier"]
+	existingFilterModes := r.Form["filter-mode"]
+	existingTags := make([]*Tag, len(existingFilterTags))
+
+	for i, name := range existingFilterTags {
+		existingTags[i] = &Tag{
+			Name:         name,
+			Value:        existingFilterValues[i],
+			ModeModifier: existingFilterModifiers[i],
+			FilterMode:   existingFilterModes[i],
+		}
+	}
+
+	return existingTags
+}
+
+func createFilterGroupsFromTags(tags []*Tag) []*FilterGroup {
+	tagsNamed := make(map[string][]*Tag)
+	groupOrder := []string{}
+
+	for _, tag := range tags {
+		if _, exists := tagsNamed[tag.Name]; !exists {
+			groupOrder = append(groupOrder, tag.Name)
+		}
+		tagsNamed[tag.Name] = append(tagsNamed[tag.Name], tag)
+	}
+
+	filterGroups := make([]*FilterGroup, 0, len(groupOrder))
+	for _, tagName := range groupOrder {
+		filterGroups = append(filterGroups, &FilterGroup{
+			Name: tagName,
+			Tags: tagsNamed[tagName],
+		})
+	}
+
+	return filterGroups
 }
 
 // ----------------------------
@@ -987,7 +1173,7 @@ func viewWorksHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		searchWorksNewFilterHandler(w, r)
 	default:
-		return
+		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 	}
 }
 
@@ -1018,7 +1204,7 @@ func searchWorksHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		searchWorksPostHandler(w, r)
 	default:
-		return
+		searchWorksNewFilterHandler(w, r)
 	}
 }
 
@@ -1026,7 +1212,7 @@ func searchWorksNewFilterHandler(w http.ResponseWriter, r *http.Request) {
 	newFilter := getNewFilter()
 	saveFilter(newFilter)
 
-	http.Redirect(w, r, r.URL.Path+"/with/filter/number/"+newFilter.GetNumberingUrlString(), http.StatusSeeOther)
+	http.Redirect(w, r, r.URL.Path+"/with/filter/"+newFilter.GetNumberingUrlString(), http.StatusSeeOther)
 }
 
 func searchWorksGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -1041,6 +1227,7 @@ func searchWorksGetHandler(w http.ResponseWriter, r *http.Request) {
 			r[0] = unicode.ToUpper(r[0])
 			return string(r)
 		},
+		"add": func(a, b int) int { return a + b },
 	}).ParseFiles("./resources/search.html"))
 
 	listings := getAllListings()
@@ -1050,91 +1237,59 @@ func searchWorksGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := getFilterByNumbering(numbering)
-	templateData := createTemplateDataWithData2(listings, filter)
+
+	type ListablesFilter struct {
+		Listables []Listable
+		Filter    *Filter
+	}
+
+	templateData := createTemplateData(&ListablesFilter{
+		Listables: listings,
+		Filter:    filter,
+	})
 
 	templ.Execute(w, templateData)
 }
 
 // TODO: handle search
 func searchWorksPostHandler(w http.ResponseWriter, r *http.Request) {
-	action := r.FormValue("action")
+	action, actionValue := extractActionAndValueFromRequest(r)
 	numbering, err := urlStringToNumbering(r.PathValue("numbering"))
 	if err != nil {
 		panic("unexpected error when trying to get filter")
 	}
 
 	filter := getFilterByNumbering(numbering)
-
-	log.Println("POST!")
-
-	switch action {
-	case "add-filter":
-		err := r.ParseForm()
-		if err != nil {
-			panic("unexpected error parsing form")
-		}
-
-		existingFilterTags := r.Form["added-filters.tag"]
-		existingFilterValues := r.Form["added-filters.value"]
-		existingFilterModes := r.Form["filter-mode"]
-		existingTags := make([]*Tag, len(existingFilterTags))
-
-		for i, name := range existingFilterTags {
-			existingTags[i] = &Tag{
-				Name:       name,
-				Value:      existingFilterValues[i],
-				FilterMode: existingFilterModes[i],
-			}
-		}
-
-		filter.Tags = existingTags
-
-		newFilterTag := r.FormValue("filter-tag")
-		filter.Tags = append(filter.Tags, &Tag{
-			Name: newFilterTag,
-		})
-
-		saveFilter(filter)
-
-		//log.Println("redirecting on post to filterString: " + newFilterString)
-		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
-	default:
-	}
-
-	/* action := r.FormValue("action")
-	numbering := r.PathValue("numbering")
-
-	getFilterByNumbering(id) */
-
-	return
-
-	/* action := r.FormValue("action")
-	filterString := r.PathValue("filters")
-	log.Println("extracted existing filterString from url: " + filterString)
-	existingTags := extractTagsFromFilter(filterString)
-	log.Println("EXISTING TAGS EXTRACTED FROM URL:")
-	for _, tag := range existingTags {
-		log.Println(tag.String())
-	}
+	filter.FilterVisibility = r.FormValue("filter-visibility")
 
 	switch action {
 	case "add-filter":
-		newFilter := r.FormValue("filter-tag")
-		err := r.ParseForm()
+
+		// Extract the tags from the request, because the values in the request might have changed
+		// from the values in the retrieved filter
+		existingTags := extractTagsFromRequest(r)
+		newFilterTag := &Tag{
+			Name: r.FormValue("filter-tag"),
+		}
+
+		existingTags = append(existingTags, newFilterTag)
+		filter.FilterGroups = createFilterGroupsFromTags(existingTags)
+		filter.PreviousTag = newFilterTag.Name
+	case "remove-filter":
+		idx, err := strconv.Atoi(actionValue)
 		if err != nil {
-			panic("unexpected error parsing form")
+			panic("unexpected error parsing index for filter to remove")
 		}
 
-		newTag := &Tag{
-			Name:   newFilter,
-			Values: []string{},
-		}
+		existingTags := extractTagsFromRequest(r)
+		existingTags = append(existingTags[:idx], existingTags[idx+1:]...)
+		filter.FilterGroups = createFilterGroupsFromTags(existingTags)
+		filter.PreviousTag = ""
+	}
 
-		newFilterString := tagsToFilterString(append(existingTags, newTag))
-		log.Println("redirecting on post to filterString: " + newFilterString)
-		http.Redirect(w, r, "/works"+newFilterString, http.StatusSeeOther)
-	default:
-	} */
+	saveFilter(filter)
+
+	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 }
 
 func viewWorkHandler(w http.ResponseWriter, r *http.Request) {
@@ -1160,76 +1315,108 @@ func viewSeriesHandler(w http.ResponseWriter, r *http.Request) {
 	templ.Execute(w, series)
 }
 
+func createWorkHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		createWorkGetHandler(w, r)
+	case http.MethodPost:
+		createWorkPostHandler(w, r)
+	default:
+		createNewWorkHandler(w, r)
+	}
+}
+
 func createNewWorkHandler(w http.ResponseWriter, r *http.Request) {
 
 	newWork := createNewWork()
-	log.Println("newWork id: " + newWork.Id.String())
 	saveWork(newWork)
 
-	http.Redirect(w, r, r.URL.Path+"/number/"+newWork.Id.String(), http.StatusSeeOther)
+	http.Redirect(w, r, r.URL.Path+newWork.GetNumberingUrlString(), http.StatusSeeOther)
 }
 
-func composeWorkPostHandler(w http.ResponseWriter, r *http.Request) {
-	action := r.FormValue("action")
+func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
+	action, actionValue := extractActionAndValueFromRequest(r)
 	work := getWorkFromRequest(r)
+
+	err := r.ParseMultipartForm(10 << 20) // TODO: increase?
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "content uploaded is too large", http.StatusBadRequest)
+		return
+	}
 
 	switch action {
 	case "move-up":
-		idx, err := strconv.Atoi(r.FormValue("content-index"))
+		id, err := uuid.Parse(actionValue)
 		if err != nil {
-			log.Println(err)
-			http.Error(w, "Unexpected error moving content.", http.StatusInternalServerError)
-			return
+			panic("unexpected error parsing uuid for content")
 		}
 
-		moveContentUp(work, idx)
+		content := getContent(id)
+		moveContentUp(work, content.GetIndex())
 
 	case "move-down":
-		idx, err := strconv.Atoi(r.FormValue("content-index"))
+		id, err := uuid.Parse(actionValue)
 		if err != nil {
-			log.Println(err)
-			http.Error(w, "Unexpected error moving content.", http.StatusInternalServerError)
-			return
+			panic("unexpected error parsing uuid for content")
 		}
 
-		moveContentDown(work, idx)
+		content := getContent(id)
+		moveContentDown(work, content.GetIndex())
 
 	case "delete-content":
-		contentId := getUuidFromId(r.FormValue("content-id"))
-		deleteContent(work, contentId)
+		id, err := uuid.Parse(actionValue)
+		if err != nil {
+			panic("unexpected error parsing uuid for content")
+		}
+
+		deleteContent(work, id)
 
 	case "upload":
-		err := r.ParseMultipartForm(10 << 20) // TODO: increase?
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Content uploaded is too large.", http.StatusBadRequest)
-			return
-		}
-
 		err = handleContentUpload(r, work)
 		if err != nil {
-			http.Error(w, "Error during content upload.", http.StatusInternalServerError)
+			if errors.Is(err, http.ErrMissingFile) {
+				// TODO: handle better
+				http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+				break
+			}
+
+			http.Error(w, "error during content upload", http.StatusInternalServerError)
 			return
 		}
 
-	default:
+	case "add-text":
+		newText := ContentTextType.createNew([]string{""})
+		newText.SetIndex(len(work.Contents))
+		work.Contents = append(work.Contents, newText)
+		saveWork(work)
+	}
+
+	title := r.Form["title-text"]
+	work.Title = title[0]
+
+	for k, v := range r.Form {
+		log.Println(k)
+		if strings.HasPrefix(k, "text[") {
+			id, err := uuid.Parse(k[5:41])
+			if err != nil {
+				panic("unexpected error parsing id for text")
+			}
+
+			text := getContent(id)
+			text.SetSources(v)
+
+			log.Printf("text with id %v setting text to %s", text.GetId(), v)
+
+			work.Contents[text.GetIndex()] = text
+			saveWork(work)
+		}
 	}
 
 	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 }
 
-func createWorkHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		composeWorkGetHandler(w, r)
-	case http.MethodPost:
-		composeWorkPostHandler(w, r)
-	default:
-		return
-	}
-}
-
-func composeWorkGetHandler(w http.ResponseWriter, r *http.Request) {
+func createWorkGetHandler(w http.ResponseWriter, r *http.Request) {
 	work := getWorkFromRequest(r)
 	templ := template.Must(template.ParseFiles("./resources/canvas.html"))
 	templ.Execute(w, work)
@@ -1259,13 +1446,13 @@ func main() {
 	mux.HandleFunc("/works", viewWorksHandler)
 
 	mux.HandleFunc("/search/works", searchWorksNewFilterHandler)
-	mux.HandleFunc("/search/works/with/filter/number/{numbering...}", searchWorksHandler)
+	mux.HandleFunc("/search/works/with/filter/{numbering...}", searchWorksHandler)
 
-	mux.HandleFunc("/work/number/{id}", viewWorkHandler)
-	mux.HandleFunc("/series/number/{id}", viewSeriesHandler)
+	mux.HandleFunc("/work/{numbering...}", viewWorkHandler)
+	mux.HandleFunc("/series/{numbering...}", viewSeriesHandler)
 
 	mux.HandleFunc("/compose/work", createNewWorkHandler)
-	mux.HandleFunc("/compose/work/number/{id}", createWorkHandler)
+	mux.HandleFunc("/compose/work/{numbering...}", createWorkHandler)
 
 	mux.HandleFunc("/organize/works/by/{name}", organizeWorksHandler)
 	log.Fatal(http.ListenAndServe(":8080", subdomainPeriodReplacer(mux)))

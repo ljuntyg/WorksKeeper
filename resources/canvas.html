@@ -1,47 +1,68 @@
 <html>
   <body>
-    
-    <h1>{{ .GetTitle }}</h1>
 
-    <section>
-      {{ range .Contents }}
-        {{ .ToHtml }}
+    <!-- *Work is passed in-->
 
-        <form method="POST" style="display:inline;">
-          <input type="hidden" name="content-index" value="{{ .GetIndex }}" />
-          <input type="hidden" name="work-id" value="{{ $.GetId }}" />
-          <input type="hidden" name="action" value="move-up" />
-          <button type="submit">Move up</button>
-        </form>
+    <form method="post" enctype="multipart/form-data">
 
-        <form method="POST" style="display:inline;">
-          <input type="hidden" name="content-index" value="{{ .GetIndex }}" />
-          <input type="hidden" name="work-id" value="{{ $.GetId }}" />
-          <input type="hidden" name="action" value="move-down" />
-          <button type="submit">Move down</button>
-        </form>
-
-        <form method="POST" style="display:inline;">
-          <input type="hidden" name="content-id" value="{{ .GetId }}" />
-          <input type="hidden" name="work-id" value="{{ $.GetId }}" />
-          <input type="hidden" name="action" value="delete-content" />
-          <button type="submit">Delete</button>
-        </form>
-
-      {{ end }}
-    </section>
-
-    <aside>
-      <form method="POST" enctype="multipart/form-data">
+      <h1>
+        <textarea name="title-text">
+          {{ .GetTitle }}
+        </textarea>
+      </h1>
+  
+      <section>
+        {{ range .Contents }}
         <fieldset>
-          <legend>Canvas tools</legend>
-          <input type="file" name="upload" />
-          <input type="hidden" name="work-id" value="{{ .GetId }}" />
-          <input type="hidden" name="action" value="upload" />
-          <button type="submit">Upload</button>
-        </fieldset>
-      </form>
-    </aside>
+          <legend>
+            <button type="submit" name="action" value="move-up:{{ .GetId }}">
+              ↑
+            </button>
 
+            <button type="submit" name="action" value="move-down:{{ .GetId }}">
+              ↓
+            </button>
+            
+            <button type="submit" name="action" value="delete-content:{{ .GetId }}">
+              ✕
+            </button>
+          </legend>
+          
+          {{ if eq .GetType.SingularString "text" }}
+            <textarea name="text[{{ .GetId }}]">
+              {{ .ToHtml }}
+            </textarea>
+          {{ else }}
+            {{ .ToHtml }}
+          {{ end }}
+        </fieldset>
+        {{ end }}
+      </section>
+  
+      <aside>
+        <fieldset>
+          <legend>
+            Compose work with
+
+            <button type="submit" name="action" value="add-text:{{ .GetId }}">
+              text
+            </button>
+          </legend>
+
+          <fieldset>
+            <legend>
+              with sound, video or image
+
+              <button type="submit" name="action" value="upload:{{ .GetId }}">
+                upload
+              </button>
+            </legend>
+            
+            <input type="file" name="upload" />
+          </fieldset>
+
+        </fieldset>
+      </aside>
+    </form>
   </body>
 </html>
