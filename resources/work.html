@@ -6,13 +6,7 @@
     {{ range .Contents }}
 
       <!-- TODO: pass in ContentTypes through HtmlEnvironment -->
-      {{ if eq .GetType.SingularString "text" }}
-        <p>
-          {{ .ToHtml }}
-        </p>
-      {{ else }}
-        {{ .ToHtml }}
-      {{ end }}
+      {{ .ToHtml }}
 
     {{ end }}
 

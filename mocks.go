@@ -11,6 +11,37 @@ import (
 	"github.com/google/uuid"
 )
 
+type Database interface {
+	SaveWork(w *Work)
+	SaveSeries(s *Series)
+
+	SaveText(t *Text)
+	SaveEmptyMedia(m *EmptyMedia)
+	SaveSound(s *Sound)
+	SaveVideo(v *Video)
+	SaveImage(i *Image)
+	SaveFilter(f *Filter)
+
+	GetWork(numbering Numbering) *Work
+	GetSeries(numbering Numbering) *Series
+	GetContent(id uuid.UUID) Contentable
+	GetText(id uuid.UUID) *Text
+	GetMedia(id uuid.UUID) Mediable
+	GetSound(id uuid.UUID) *Sound
+	GetVideo(id uuid.UUID) *Video
+	GetImage(id uuid.UUID) *Image
+	GetFilter(numbering Numbering) *Filter
+
+	GetAllListings() []Listable
+}
+
+type WorksKeeperDB struct {
+	Listings map[Numbering]Listable
+	Contents map[uuid.UUID]Contentable
+	Tags     map[uuid.UUID]Tag
+	Filters  map[Numbering]*Filter
+}
+
 var mockDb = &WorksKeeperDB{
 	Listings: make(map[Numbering]Listable),
 	Contents: make(map[uuid.UUID]Contentable),
@@ -115,38 +146,11 @@ func initMockTagValues() []*TagValues {
 	return slices.Collect(maps.Values(tagValuesMap))
 }
 
-type Database interface {
-	SaveWork(w *Work)
-	SaveSeries(s *Series)
-	SaveText(t *Text)
-	SaveSound(s *Sound)
-	SaveVideo(v *Video)
-	SaveImage(i *Image)
-	SaveFilter(f *Filter)
-
-	GetWork(id uuid.UUID) *Work
-	GetSeries(id uuid.UUID) *Series
-	GetText(id uuid.UUID) *Text
-	GetSound(id uuid.UUID) *Sound
-	GetVideo(id uuid.UUID) *Video
-	GetImage(id uuid.UUID) *Image
-	GetFilter(numbering Numbering) *Filter
-
-	GetAllListings() []Listable
-}
-
-type WorksKeeperDB struct {
-	Listings map[Numbering]Listable
-	Contents map[uuid.UUID]Contentable
-	Tags     map[uuid.UUID]Tag
-	Filters  map[Numbering]*Filter
-}
-
 func (db *WorksKeeperDB) SaveWork(w *Work) {
 	db.Listings[w.GetNumbering()] = w
 
 	for _, c := range w.Contents {
-		saveContent(c)
+		c.Save()
 	}
 }
 
@@ -165,8 +169,16 @@ func (db *WorksKeeperDB) SaveSeries(s *Series) {
 	}
 }
 
+func (db *WorksKeeperDB) SaveContent(c Contentable) {
+	db.Contents[c.GetId()] = c
+}
+
 func (db *WorksKeeperDB) SaveText(t *Text) {
 	db.Contents[t.GetId()] = t
+}
+
+func (db *WorksKeeperDB) SaveEmptyMedia(m *EmptyMedia) {
+	db.Contents[m.GetId()] = m
 }
 
 func (db *WorksKeeperDB) SaveSound(s *Sound) {
@@ -190,10 +202,12 @@ func (db *WorksKeeperDB) GetWork(numbering Numbering) *Work {
 	if !ok {
 		panic("GetWork: no listing with that ID")
 	}
+
 	w, ok := v.(*Work)
 	if !ok {
 		panic(fmt.Sprintf("GetWork: listing %T is not a Work", v))
 	}
+
 	return w
 }
 
@@ -202,11 +216,22 @@ func (db *WorksKeeperDB) GetSeries(numbering Numbering) *Series {
 	if !ok {
 		panic("GetSeries: no listing with that ID")
 	}
+
 	s, ok := v.(*Series)
 	if !ok {
 		panic(fmt.Sprintf("GetSeries: listing %T is not a Series", v))
 	}
+
 	return s
+}
+
+func (db *WorksKeeperDB) GetContent(id uuid.UUID) Contentable {
+	c, ok := db.Contents[id]
+	if !ok {
+		panic("GetContent: no content with that ID")
+	}
+
+	return c
 }
 
 func (db *WorksKeeperDB) GetText(id uuid.UUID) *Text {
@@ -214,11 +239,27 @@ func (db *WorksKeeperDB) GetText(id uuid.UUID) *Text {
 	if !ok {
 		panic("GetText: no content with that ID")
 	}
+
 	t, ok := v.(*Text)
 	if !ok {
 		panic(fmt.Sprintf("GetText: content %T is not a Text", v))
 	}
+
 	return t
+}
+
+func (db *WorksKeeperDB) GetMedia(id uuid.UUID) Mediable {
+	c, ok := db.Contents[id]
+	if !ok {
+		panic("GetMedia: no content with that ID")
+	}
+
+	m, ok := c.(Mediable)
+	if !ok {
+		panic(fmt.Sprintf("GetMedia: content %T is not media", c))
+	}
+
+	return m
 }
 
 func (db *WorksKeeperDB) GetImage(id uuid.UUID) *Image {
@@ -226,10 +267,12 @@ func (db *WorksKeeperDB) GetImage(id uuid.UUID) *Image {
 	if !ok {
 		panic("GetImage: no content with that ID")
 	}
+
 	img, ok := v.(*Image)
 	if !ok {
 		panic(fmt.Sprintf("GetImage: content %T is not an Image", v))
 	}
+
 	return img
 }
 
@@ -238,10 +281,12 @@ func (db *WorksKeeperDB) GetSound(id uuid.UUID) *Sound {
 	if !ok {
 		panic("GetSound: no content with that ID")
 	}
+
 	s, ok := v.(*Sound)
 	if !ok {
 		panic(fmt.Sprintf("GetSound: content %T is not a Sound", v))
 	}
+
 	return s
 }
 
@@ -250,10 +295,12 @@ func (db *WorksKeeperDB) GetVideo(id uuid.UUID) *Video {
 	if !ok {
 		panic("GetVideo: no content with that ID")
 	}
+
 	video, ok := v.(*Video)
 	if !ok {
 		panic(fmt.Sprintf("GetVideo: content %T is not a Video", v))
 	}
+
 	return video
 }
 
@@ -292,10 +339,10 @@ func getMockSound(idx int) *Sound {
 	log.Println("calling MOCK GetMockSound()")
 
 	return &Sound{
-		SoundPaths: []string{getBaseUrl() + ContentSoundType.urlPrefix() + "609562_migfus20_background-music.ogg"},
-		Caption:    "Sound caption",
-		Id:         uuid.New(),
-		Index:      idx,
+		Sources: []string{getBaseUrl() + MediaSoundType.urlPrefix() + "609562_migfus20_background-music.ogg"},
+		Caption: getMockCaption(),
+		Id:      uuid.New(),
+		Index:   idx,
 	}
 }
 
@@ -303,10 +350,10 @@ func getMockVideo(idx int) *Video {
 	log.Println("calling MOCK GetMockVideo()")
 
 	return &Video{
-		VideoPaths: []string{getBaseUrl() + ContentVideoType.urlPrefix() + "14044733_1080_1920_48fps(2).mp4"},
-		Caption:    "Testing a video caption",
-		Id:         uuid.New(),
-		Index:      idx,
+		Sources: []string{getBaseUrl() + MediaVideoType.urlPrefix() + "14044733_1080_1920_48fps(2).mp4"},
+		Caption: getMockCaption(),
+		Id:      uuid.New(),
+		Index:   idx,
 	}
 }
 
@@ -314,23 +361,35 @@ func getMockImage(idx int) *Image {
 	log.Println("calling MOCK GetMockImage()")
 
 	return &Image{
-		ImagePaths: []string{getBaseUrl() + ContentImageType.urlPrefix() + "IMG20250819173509~2.jpg"},
-		Caption:    "An image caption",
-		Id:         uuid.New(),
-		Index:      idx,
+		Sources: []string{getBaseUrl() + MediaImageType.urlPrefix() + "IMG20250819173509~2.jpg"},
+		Caption: getMockCaption(),
+		Id:      uuid.New(),
+		Index:   idx,
 	}
 }
 
-func (ct ContentType) getMock(idx int) Contentable {
+// TODO:
+func getMockCaption() *Caption {
+	return &Caption{"Test caption"}
+}
+
+func (mt MediaType) GetMock(idx int) Contentable {
+	switch mt {
+	case MediaSoundType:
+		return getMockSound(idx)
+	case MediaVideoType:
+		return getMockVideo(idx)
+	case MediaImageType:
+		return getMockImage(idx)
+	default:
+		panic("unexpected ContentType when getting mock")
+	}
+}
+
+func (ct ContentType) GetMock(idx int) Contentable {
 	switch ct {
 	case ContentTextType:
 		return getMockText(idx)
-	case ContentSoundType:
-		return getMockSound(idx)
-	case ContentVideoType:
-		return getMockVideo(idx)
-	case ContentImageType:
-		return getMockImage(idx)
 	default:
 		panic("unexpected ContentType when getting mock")
 	}
@@ -342,9 +401,14 @@ func getMockContents() []Contentable {
 	contents := make([]Contentable, n)
 
 	for i := range n {
-		ct := AllContentTypes[rng.Intn(len(AllContentTypes))]
-
-		contents[i] = ct.getMock(i)
+		pickMedia := rng.Intn(2)
+		if pickMedia == 1 {
+			t := AllMediaTypes[rng.Intn(len(AllMediaTypes))]
+			contents[i] = t.GetMock(i)
+		} else {
+			t := AllContentTypes[rng.Intn(len(AllContentTypes))]
+			contents[i] = t.GetMock(i)
+		}
 	}
 
 	return contents

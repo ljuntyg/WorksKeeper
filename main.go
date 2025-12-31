@@ -23,13 +23,9 @@ type HtmlEnvironment struct {
 	AllTags []*TagValues
 }
 
-type TemplateData[T, V any] struct {
+type TemplateData[T any] struct {
 	Environment *HtmlEnvironment
 	Data        T
-}
-
-type Numberable interface {
-	GetNumberingUrlString() string
 }
 
 type Numbering struct {
@@ -38,13 +34,23 @@ type Numbering struct {
 	Random             int
 }
 
-type Listable interface {
-	GetId() uuid.UUID
+type Numberable interface {
+	GetHrefString() string
+	GetNumberingUrlString() string
 	GetNumbering() Numbering
+}
+
+type Saveable interface {
+	Save()
+}
+
+type Listable interface {
+	Numberable
+	Saveable
+	GetId() uuid.UUID
 	GetParentListing() Listable
 	GetTitle() string
 	GetTimeRequiredMinutes() int
-	GetUrl() string
 	GetTags() []*Tag
 	GetIsPublic() bool
 	String() string
@@ -58,6 +64,10 @@ type Series struct {
 	IsPublic     bool
 	Listings     []Listable
 	Tags         []*Tag
+}
+
+type Emptiable interface {
+	Remove(id uuid.UUID)
 }
 
 type Work struct {
@@ -84,6 +94,12 @@ type Filter struct {
 	PreviousTag      string // Name of previous Tag added to the filter, or "" if a Tag was removed or none have been added
 }
 
+type Templatable interface {
+	ToHtml() template.HTML
+	GetHtmlTemplateString() string
+	GetTemplateName() string
+}
+
 type Tag struct {
 	Id           uuid.UUID
 	Name         string
@@ -99,17 +115,19 @@ type TagValues struct {
 	PossibleFilterModes   []string
 }
 
+type Editable interface {
+	ToEditableHtml() template.HTML
+	GetEditableHtmlTemplateString() string
+}
+
 type Contentable interface {
+	Templatable
+	Editable
+	Saveable
 	GetId() uuid.UUID
 	GetWork() *Work
-	GetSources() []string
-	GetType() ContentType
-	ToHtml() template.HTML
 	GetIndex() int
-	GetCaption() string
-	GetHtmlTemplateString() string
 	SetIndex(idx int)
-	SetSources(sources []string)
 }
 
 type Text struct {
@@ -119,37 +137,64 @@ type Text struct {
 	Index int
 }
 
+type Caption struct {
+	Text string
+}
+
+type Captionable interface {
+	GetCaptionHtml() template.HTML
+	GetEditableCaptionHtml() template.HTML
+}
+
+type Mediable interface {
+	Contentable
+	Captionable
+	GetSources() []string
+	GetCaption() *Caption
+	SetSources(sources []string)
+	SetCaption(caption *Caption)
+}
+
+type EmptyMedia struct {
+	Id    uuid.UUID
+	Work  *Work
+	Index int
+}
+
 type Sound struct {
-	Id         uuid.UUID
-	Work       *Work
-	SoundPaths []string
-	Index      int
-	Caption    string
+	Id      uuid.UUID
+	Work    *Work
+	Sources []string
+	Index   int
+	Caption *Caption
 }
 
 type Video struct {
-	Id         uuid.UUID
-	Work       *Work
-	VideoPaths []string
-	Index      int
-	Caption    string
+	Id      uuid.UUID
+	Work    *Work
+	Sources []string
+	Index   int
+	Caption *Caption
 }
 
 type Image struct {
-	Id         uuid.UUID
-	Work       *Work
-	ImagePaths []string
-	Index      int
-	Caption    string
+	Id      uuid.UUID
+	Work    *Work
+	Sources []string
+	Index   int
+	Caption *Caption
 }
 
 type ContentType int
+type MediaType int
+
+const ContentTextType ContentType = 0
 
 const (
-	ContentTextType ContentType = iota
-	ContentSoundType
-	ContentVideoType
-	ContentImageType
+	MediaEmptyType MediaType = iota
+	MediaSoundType
+	MediaVideoType
+	MediaImageType
 )
 
 // ----------------------------
@@ -160,10 +205,6 @@ const (
 
 func (s *Series) GetId() uuid.UUID {
 	return s.Id
-}
-
-func (s *Series) GetNumbering() Numbering {
-	return s.Numbering
 }
 
 func (s *Series) GetParentListing() Listable {
@@ -181,13 +222,6 @@ func (s *Series) GetTimeRequiredMinutes() int {
 	}
 
 	return totalTime
-}
-
-// TODO:
-func (s *Series) GetUrl() string {
-	log.Println("calling MOCK GetUrl()")
-
-	return "/series/" + s.GetNumberingUrlString()
 }
 
 func (s *Series) GetTags() []*Tag {
@@ -214,6 +248,10 @@ func (s *Series) String() string {
 	return b.String()
 }
 
+func (s *Series) GetHrefString() string {
+	return "/series" + s.GetNumberingUrlString()
+}
+
 // TODO: add random
 func (s *Series) GetNumberingUrlString() string {
 	centuryString := fmt.Sprintf("%d%s", s.Numbering.Century, getEnglishNumberSuffix(s.Numbering.Century))
@@ -223,12 +261,17 @@ func (s *Series) GetNumberingUrlString() string {
 	return fmt.Sprintf("/%d/of/%s/century/%s/year/%s/day", s.Numbering.Serial, centuryString, yearString, dayString)
 }
 
-func (w *Work) GetId() uuid.UUID {
-	return w.Id
+func (s *Series) GetNumbering() Numbering {
+	return s.Numbering
 }
 
-func (w *Work) GetNumbering() Numbering {
-	return w.Numbering
+// TODO:
+func (s *Series) Save() {
+	getMockDb().SaveSeries(s)
+}
+
+func (w *Work) GetId() uuid.UUID {
+	return w.Id
 }
 
 func (w *Work) GetParentListing() Listable {
@@ -246,13 +289,6 @@ func (w *Work) GetTimeRequiredMinutes() int {
 	return w.Length
 }
 
-// TODO:
-func (w *Work) GetUrl() string {
-	log.Println("calling MOCK GetUrl()")
-
-	return "/work/" + w.GetNumberingUrlString()
-}
-
 func (w *Work) GetTags() []*Tag {
 	return w.Tags
 }
@@ -265,6 +301,10 @@ func (w *Work) String() string {
 	return fmt.Sprintf("Work: %s", w.Title)
 }
 
+func (w *Work) GetHrefString() string {
+	return "/work" + w.GetNumberingUrlString()
+}
+
 // TODO: add random
 func (w *Work) GetNumberingUrlString() string {
 	centuryString := fmt.Sprintf("%d%s", w.Numbering.Century, getEnglishNumberSuffix(w.Numbering.Century))
@@ -272,6 +312,30 @@ func (w *Work) GetNumberingUrlString() string {
 	dayString := fmt.Sprintf("%d%s", w.Numbering.Day, getEnglishNumberSuffix(w.Numbering.Day))
 
 	return fmt.Sprintf("/%d/of/%s/century/%s/year/%s/day", w.Numbering.Serial, centuryString, yearString, dayString)
+}
+
+func (w *Work) GetNumbering() Numbering {
+	return w.Numbering
+}
+
+// TODO:
+func (w *Work) Save() {
+	getMockDb().SaveWork(w)
+}
+
+// Assume Contents is always sorted by index with no gaps
+// TODO: must reorder every time?
+func (w *Work) Remove(id uuid.UUID) {
+	content := getContent(id)
+	idx := content.GetIndex()
+
+	w.Contents = append(w.Contents[:idx], w.Contents[idx+1:]...)
+
+	for i := idx; i < len(w.Contents); i++ {
+		w.Contents[i].SetIndex(i)
+	}
+
+	w.Save()
 }
 
 // ----------------------------------------
@@ -286,6 +350,11 @@ func (f *Filter) GetNumberingUrlString() string {
 	dayString := fmt.Sprintf("%d%s", f.Numbering.Day, getEnglishNumberSuffix(f.Numbering.Day))
 
 	return fmt.Sprintf("/%d/of/%s/century/%s/year/%s/day", f.Numbering.Serial, centuryString, yearString, dayString)
+}
+
+// TODO:
+func (f *Filter) Save() {
+	getMockDb().SaveFilter(f)
 }
 
 func (t *Tag) ToHtml() template.HTML {
@@ -308,7 +377,7 @@ func (t *Tag) GetPossibleFilterModes() []string {
 }
 
 // TODO:
-func (t *Tag) getHtmlTemplateString() string {
+func (t *Tag) GetHtmlTemplateString() string {
 	switch t.Name {
 	case "author":
 		return tagDatalistTemplate
@@ -330,7 +399,7 @@ func (t *Tag) getHtmlTemplateString() string {
 func (t *Tag) filterTagToHtmlTemplate() template.HTML {
 	log.Printf("tag %s to html template, possible values: %v", t.Name, t.GetPossibleValues())
 
-	tmpl := template.Must(template.New(t.Name).Parse(t.getHtmlTemplateString()))
+	tmpl := template.Must(template.New(t.Name).Parse(t.GetHtmlTemplateString()))
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, t); err != nil {
@@ -465,36 +534,98 @@ func (t *Text) GetWork() *Work {
 	return t.Work
 }
 
-func (t *Text) GetSources() []string {
-	return []string{t.Text}
-}
-
-func (t *Text) GetType() ContentType {
-	return ContentTextType
-}
-
-func (t *Text) ToHtml() template.HTML {
-	return contentToHtmlTemplate(t)
-}
-
 func (t *Text) GetIndex() int {
 	return t.Index
-}
-
-func (t *Text) GetCaption() string {
-	return ""
-}
-
-func (t *Text) GetHtmlTemplateString() string {
-	return textTemplate
 }
 
 func (t *Text) SetIndex(idx int) {
 	t.Index = idx
 }
 
-func (t *Text) SetSources(sources []string) {
-	t.Text = sources[0]
+func (t *Text) ToHtml() template.HTML {
+	return contentableToHtmlTemplate(t, false)
+}
+
+func (t *Text) GetHtmlTemplateString() string {
+	return textTemplate
+}
+
+func (t *Text) GetTemplateName() string {
+	return "text"
+}
+
+func (t *Text) ToEditableHtml() template.HTML {
+	return contentableToHtmlTemplate(t, true)
+}
+
+func (t *Text) GetEditableHtmlTemplateString() string {
+	return editableTextTemplate
+}
+
+// TODO:
+func (t *Text) Save() {
+	getMockDb().SaveText(t)
+}
+
+func (m *EmptyMedia) GetId() uuid.UUID {
+	return m.Id
+}
+
+func (m *EmptyMedia) GetWork() *Work {
+	return m.Work
+}
+
+func (m *EmptyMedia) GetSources() []string {
+	return []string{""}
+}
+
+func (m *EmptyMedia) GetIndex() int {
+	return m.Index
+}
+
+func (m *EmptyMedia) GetCaption() *Caption {
+	return nil
+}
+
+func (m *EmptyMedia) SetIndex(idx int) {
+	m.Index = idx
+}
+
+func (m *EmptyMedia) SetSources(sources []string) {}
+
+func (m *EmptyMedia) SetCaption(caption *Caption) {}
+
+func (m *EmptyMedia) ToHtml() template.HTML {
+	return contentableToHtmlTemplate(m, false)
+}
+
+func (m *EmptyMedia) GetHtmlTemplateString() string {
+	return ""
+}
+
+func (m *EmptyMedia) GetTemplateName() string {
+	return "empty"
+}
+
+func (m *EmptyMedia) ToEditableHtml() template.HTML {
+	return contentableToHtmlTemplate(m, true)
+}
+
+func (m *EmptyMedia) GetEditableHtmlTemplateString() string {
+	return editableMediaTemplate
+}
+
+func (m *EmptyMedia) GetCaptionHtml() template.HTML {
+	return mediaToCaptionHtml(m, false)
+}
+
+func (m *EmptyMedia) GetEditableCaptionHtml() template.HTML {
+	return mediaToCaptionHtml(m, true)
+}
+
+// TODO:
+func (m *EmptyMedia) Save() {
+	getMockDb().SaveEmptyMedia(m)
 }
 
 func (s *Sound) GetId() uuid.UUID {
@@ -506,27 +637,15 @@ func (s *Sound) GetWork() *Work {
 }
 
 func (s *Sound) GetSources() []string {
-	return s.SoundPaths
-}
-
-func (s *Sound) GetType() ContentType {
-	return ContentSoundType
-}
-
-func (s *Sound) ToHtml() template.HTML {
-	return contentToHtmlTemplate(s)
+	return s.Sources
 }
 
 func (s *Sound) GetIndex() int {
 	return s.Index
 }
 
-func (s *Sound) GetCaption() string {
+func (s *Sound) GetCaption() *Caption {
 	return s.Caption
-}
-
-func (s *Sound) GetHtmlTemplateString() string {
-	return soundTemplate
 }
 
 func (s *Sound) SetIndex(idx int) {
@@ -534,39 +653,64 @@ func (s *Sound) SetIndex(idx int) {
 }
 
 func (s *Sound) SetSources(sources []string) {
-	s.SoundPaths = sources
+	s.Sources = sources
 }
 
-func (v *Video) GetWork() *Work {
-	return v.Work
+func (s *Sound) SetCaption(caption *Caption) {
+	s.Caption = caption
+}
+
+func (s *Sound) ToHtml() template.HTML {
+	return contentableToHtmlTemplate(s, false)
+}
+
+func (s *Sound) GetHtmlTemplateString() string {
+	return soundTemplate
+}
+
+func (s *Sound) GetTemplateName() string {
+	return "sound"
+}
+
+func (s *Sound) ToEditableHtml() template.HTML {
+	return contentableToHtmlTemplate(s, true)
+}
+
+func (s *Sound) GetEditableHtmlTemplateString() string {
+	return editableSoundTemplate
+}
+
+func (s *Sound) GetCaptionHtml() template.HTML {
+	return mediaToCaptionHtml(s, false)
+}
+
+func (s *Sound) GetEditableCaptionHtml() template.HTML {
+	return mediaToCaptionHtml(s, true)
+}
+
+// TODO:
+func (s *Sound) Save() {
+	getMockDb().SaveSound(s)
 }
 
 func (v *Video) GetId() uuid.UUID {
 	return v.Id
 }
 
+func (v *Video) GetWork() *Work {
+	return v.Work
+}
+
 func (v *Video) GetSources() []string {
-	return v.VideoPaths
-}
-
-func (v *Video) GetType() ContentType {
-	return ContentVideoType
-}
-
-func (v *Video) ToHtml() template.HTML {
-	return contentToHtmlTemplate(v)
+	return v.Sources
 }
 
 func (v *Video) GetIndex() int {
 	return v.Index
 }
 
-func (v *Video) GetCaption() string {
+func (v *Video) GetCaption() *Caption {
 	return v.Caption
-}
-
-func (v *Video) GetHtmlTemplateString() string {
-	return videoTemplate
 }
 
 func (v *Video) SetIndex(idx int) {
@@ -574,7 +718,44 @@ func (v *Video) SetIndex(idx int) {
 }
 
 func (v *Video) SetSources(sources []string) {
-	v.VideoPaths = sources
+	v.Sources = sources
+}
+
+func (v *Video) SetCaption(caption *Caption) {
+	v.Caption = caption
+}
+
+func (v *Video) ToHtml() template.HTML {
+	return contentableToHtmlTemplate(v, false)
+}
+
+func (v *Video) GetHtmlTemplateString() string {
+	return videoTemplate
+}
+
+func (v *Video) GetTemplateName() string {
+	return "video"
+}
+
+func (v *Video) ToEditableHtml() template.HTML {
+	return contentableToHtmlTemplate(v, true)
+}
+
+func (v *Video) GetEditableHtmlTemplateString() string {
+	return editableVideoTemplate
+}
+
+func (v *Video) GetCaptionHtml() template.HTML {
+	return mediaToCaptionHtml(v, false)
+}
+
+func (v *Video) GetEditableCaptionHtml() template.HTML {
+	return mediaToCaptionHtml(v, true)
+}
+
+// TODO:
+func (v *Video) Save() {
+	getMockDb().SaveVideo(v)
 }
 
 func (i *Image) GetId() uuid.UUID {
@@ -586,73 +767,207 @@ func (i *Image) GetWork() *Work {
 }
 
 func (i *Image) GetSources() []string {
-	return i.ImagePaths
-}
-
-func (i *Image) GetType() ContentType {
-	return ContentImageType
-}
-
-func (i *Image) ToHtml() template.HTML {
-	return contentToHtmlTemplate(i)
+	return i.Sources
 }
 
 func (i *Image) GetIndex() int {
 	return i.Index
 }
 
-func (i *Image) GetCaption() string {
+func (i *Image) GetCaption() *Caption {
 	return i.Caption
-}
-
-func (i *Image) GetHtmlTemplateString() string {
-	return imageTemplate
 }
 
 func (i *Image) SetIndex(idx int) {
 	i.Index = idx
 }
 
-func (i *Image) SetSources(sources []string) {
-	i.ImagePaths = sources
+func (i *Image) SetCaption(caption *Caption) {
+	i.Caption = caption
 }
 
-func contentToHtmlTemplate(c Contentable) template.HTML {
-	tmpl := template.Must(template.New(c.GetType().SingularString()).Parse(c.GetHtmlTemplateString()))
+func (i *Image) SetSources(sources []string) {
+	i.Sources = sources
+}
+
+func (i *Image) ToHtml() template.HTML {
+	return contentableToHtmlTemplate(i, false)
+}
+
+func (i *Image) GetHtmlTemplateString() string {
+	return imageTemplate
+}
+
+func (i *Image) GetTemplateName() string {
+	return "image"
+}
+
+func (i *Image) ToEditableHtml() template.HTML {
+	return contentableToHtmlTemplate(i, true)
+}
+
+func (i *Image) GetEditableHtmlTemplateString() string {
+	return editableImageTemplate
+}
+
+func (i *Image) GetCaptionHtml() template.HTML {
+	return mediaToCaptionHtml(i, false)
+}
+
+func (i *Image) GetEditableCaptionHtml() template.HTML {
+	return mediaToCaptionHtml(i, true)
+}
+
+// TODO:
+func (i *Image) Save() {
+	getMockDb().SaveImage(i)
+}
+
+func contentableToHtmlTemplate(c Contentable, editable bool) template.HTML {
+	var tmplString string
+	if editable {
+		tmplString = c.GetEditableHtmlTemplateString()
+	} else {
+		tmplString = c.GetHtmlTemplateString()
+	}
+
+	tmpl := template.Must(template.New(c.GetTemplateName()).Parse(tmplString))
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, c); err != nil {
-		panic(fmt.Sprintf("unexpected error executing %s HTML template", c.GetType().SingularString()))
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", c.GetTemplateName()))
 	}
 
 	return template.HTML(buf.String())
 }
 
-const textTemplate = `{{index .GetSources 0}}`
+func mediaToCaptionHtml(m Mediable, editable bool) template.HTML {
+	var tmplString string
+	if editable {
+		tmplString = editableCaptionTemplate
+	} else {
+		tmplString = captionTemplate
+	}
+
+	tmpl := template.Must(template.New(m.GetTemplateName()).Parse(tmplString))
+
+	type MediableCaption struct {
+		Media   Mediable
+		Caption *Caption
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, &MediableCaption{
+		Media:   m,
+		Caption: m.GetCaption(),
+	}); err != nil {
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", m.GetTemplateName()))
+	}
+
+	return template.HTML(buf.String())
+}
+
+// MediableCaption is passed in
+const captionTemplate = `{{ with .Media.GetCaption }}
+<figcaption>
+	{{ .Text }}
+</figcaption>
+{{ end }}`
+
+const textTemplate = `<p>{{ .Text }}</p>`
 
 const soundTemplate = `<figure>
 	<audio controls>
-		{{range .GetSources}}
-		<source src={{.}}>
-		{{end}}
+		{{ range .GetSources }}
+		<source src={{ . }}>
+		{{ end }}
 		Your browser doesn't support this audio.
 	</audio>
-	<figcaption>{{.GetCaption}}</figcaption>
+	
+	{{ .GetCaptionHtml }}
 </figure>`
 
 const videoTemplate = `<figure>
 	<video controls>
-		{{range .GetSources}}
-		<source src={{.}}>
-		{{end}}
+		{{ range .GetSources }}
+		<source src={{ . }}>
+		{{ end }}
 		Your browser doesn't support this video.
 	</video>
-	<figcaption>{{.GetCaption}}</figcaption>
+	
+	{{ .GetCaptionHtml }}
 </figure>`
 
 const imageTemplate = `<figure>
-	<img src={{index .GetSources 0}} alt="Image">
-	<figcaption>{{.GetCaption}}</figcaption>
+	<img src={{ index .GetSources 0 }} alt="Image">
+
+	{{ .GetCaptionHtml }}
+</figure>`
+
+// MediableCaption is passed in
+const editableCaptionTemplate = `{{ if .Caption }}
+<fieldset>
+	<legend>
+		<button type="submit" name="action" value="delete-caption:{{ .Media.GetId }}">
+			✕
+		</button>
+
+		caption
+	</legend>
+
+	<textarea name="caption[{{ .Media.GetId }}]">
+		{{ .Caption.Text }}
+	</textarea>
+</fieldset>
+{{ else }}
+<br>
+<button type="submit" name="action" value="add-caption:{{ .Media.GetId }}">
+	&
+</button>
+
+caption
+{{ end }}`
+
+const editableTextTemplate = `<textarea name=text[{{ .GetId }}]>{{index .Text }}</textarea>`
+
+const editableMediaTemplate = `<fieldset>
+	<legend>	
+		<button type="submit" name="action" value="upload:{{ .GetId }}">
+			Upload
+		</button>
+
+		sound, video or image
+	</legend>
+
+	<input type="file" name="upload" />
+</fieldset>`
+
+const editableSoundTemplate = `<figure>
+	<audio controls>
+		{{ range .GetSources }}
+		<source src={{ . }}>
+		{{ end }}
+		Your browser doesn't support this audio.
+	</audio>
+
+	{{ .GetEditableCaptionHtml }}
+</figure>`
+
+const editableVideoTemplate = `<figure>
+	<video controls>
+		{{ range .GetSources }}
+		<source src={{ . }}>
+		{{ end }}
+		Your browser doesn't support this video.
+	</video>
+
+	{{ .GetEditableCaptionHtml }}
+</figure>`
+
+const editableImageTemplate = `<figure>
+	<img src={{ index .GetSources 0 }} alt="Image">
+	
+	{{ .GetEditableCaptionHtml }}
 </figure>`
 
 // --------------------------------------
@@ -661,120 +976,126 @@ const imageTemplate = `<figure>
 //
 // \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 
-// Careful changing this, html templates might use this to check type
-func (ct ContentType) String() string {
+func (ct ContentType) CreateNew() Contentable {
 	switch ct {
 	case ContentTextType:
-		return "texts"
-	case ContentSoundType:
-		return "sounds"
-	case ContentVideoType:
-		return "videos"
-	case ContentImageType:
-		return "images"
+		return &Text{
+			Id: uuid.New(),
+		}
 	default:
-		return "unknown"
+		panic("unexpected content type when creating new")
 	}
 }
 
-// Careful changing this, html templates might use this to check type
-func (ct ContentType) SingularString() string {
-	str := ct.String()
-	if str[len(str)-1:] == "s" {
-		return str[:len(str)-1]
-	} else {
-		return str
+func (ct ContentType) String() string {
+	switch ct {
+	case ContentTextType:
+		return "sound"
+	default:
+		panic("unexpected content type when getting string")
+	}
+}
+
+func (mt MediaType) CreateNew(sources []string) Mediable {
+	switch mt {
+
+	case MediaEmptyType:
+		return &EmptyMedia{
+			Id: uuid.New(),
+		}
+	case MediaSoundType:
+		return &Sound{
+			Sources: sources,
+			Id:      uuid.New(),
+		}
+	case MediaVideoType:
+		return &Video{
+			Sources: sources,
+			Id:      uuid.New(),
+		}
+	case MediaImageType:
+		return &Image{
+			Sources: sources,
+			Id:      uuid.New(),
+		}
+	default:
+		panic("unexpected media type when creating new")
+	}
+}
+
+func (mt MediaType) String() string {
+	switch mt {
+	case MediaSoundType:
+		return "sound"
+	case MediaVideoType:
+		return "video"
+	case MediaImageType:
+		return "image"
+	default:
+		panic("unexpected media type when getting string")
 	}
 }
 
 // This should NOT be used for content source links
-func (ct ContentType) mediaDir() string {
-	if ct.String() == "unknown" {
-		panic("Unexpected ContentType when reading mediaDir()")
-	}
-
-	return "/resources/media/" + ct.String() + "/"
+func (mt MediaType) mediaDir() string {
+	return "/resources/media/" + mt.String() + "s/"
 }
 
 // This should be used for content source links
-func (ct ContentType) urlPrefix() string {
-	if ct.String() == "unknown" {
+func (mt MediaType) urlPrefix() string {
+	if mt.String() == "unknown" {
 		panic("Unexpected ContentType when reading urlPrefix()")
 	}
 
-	return "/" + ct.SingularString() + "/with/name/"
+	return "/" + mt.String() + "/with/name/"
 }
 
-func (ct ContentType) toLocalPath(fileName string) string {
-	return "." + ct.mediaDir() + fileName
+func (mt MediaType) toLocalPath(fileName string) string {
+	return "." + mt.mediaDir() + fileName
 }
 
-func (ct ContentType) toSourceUrl(fileName string) string {
-	return getBaseUrl() + ct.urlPrefix() + fileName
-}
-
-func (ct ContentType) createNew(sources []string) Contentable {
-	switch ct {
-	case ContentTextType:
-		return &Text{
-			Text: sources[0],
-			Id:   uuid.New(),
-		}
-	case ContentSoundType:
-		return &Sound{
-			SoundPaths: sources,
-			Id:         uuid.New(),
-		}
-	case ContentImageType:
-		return &Image{
-			ImagePaths: sources,
-			Id:         uuid.New(),
-		}
-	case ContentVideoType:
-		return &Video{
-			VideoPaths: sources,
-			Id:         uuid.New(),
-		}
-	default:
-		panic("unknown ContentType when creating empty")
-	}
+func (mt MediaType) toSourceUrl(fileName string) string {
+	return getBaseUrl() + mt.urlPrefix() + fileName
 }
 
 var AllContentTypes = []ContentType{
 	ContentTextType,
-	ContentSoundType,
-	ContentVideoType,
-	ContentImageType,
 }
 
-var MimeToContentType = map[string]ContentType{
-	"image/apng":      ContentImageType,
-	"image/avif":      ContentImageType,
-	"image/bmp":       ContentImageType,
-	"image/gif":       ContentImageType,
-	"image/jpeg":      ContentImageType,
-	"image/png":       ContentImageType,
-	"image/svg+xml":   ContentImageType,
-	"image/tiff":      ContentImageType,
-	"image/webp":      ContentImageType,
-	"audio/aac":       ContentSoundType,
-	"audio/midi":      ContentSoundType,
-	"audio/x-midi":    ContentSoundType,
-	"audio/mpeg":      ContentSoundType,
-	"audio/ogg":       ContentSoundType,
-	"audio/wav":       ContentSoundType,
-	"audio/webm":      ContentSoundType,
-	"audio/3gpp":      ContentSoundType,
-	"audio/3gpp2":     ContentSoundType,
-	"application/ogg": ContentSoundType, // TODO: ? some .ogg files
-	"video/mp4":       ContentVideoType,
-	"video/mpeg":      ContentVideoType,
-	"video/ogg":       ContentVideoType,
-	"video/webm":      ContentVideoType,
-	"video/x-msvideo": ContentVideoType,
-	"video/mp2t":      ContentVideoType,
-	"video/3gpp":      ContentVideoType,
-	"video/3gpp2":     ContentVideoType,
+var AllMediaTypes = []MediaType{
+	MediaSoundType,
+	MediaVideoType,
+	MediaImageType,
+}
+
+var MimeToMediaType = map[string]MediaType{
+	"image/apng":      MediaImageType,
+	"image/avif":      MediaImageType,
+	"image/bmp":       MediaImageType,
+	"image/gif":       MediaImageType,
+	"image/jpeg":      MediaImageType,
+	"image/png":       MediaImageType,
+	"image/svg+xml":   MediaImageType,
+	"image/tiff":      MediaImageType,
+	"image/webp":      MediaImageType,
+	"audio/aac":       MediaSoundType,
+	"audio/midi":      MediaSoundType,
+	"audio/x-midi":    MediaSoundType,
+	"audio/mpeg":      MediaSoundType,
+	"audio/ogg":       MediaSoundType,
+	"audio/wav":       MediaSoundType,
+	"audio/webm":      MediaSoundType,
+	"audio/3gpp":      MediaSoundType,
+	"audio/3gpp2":     MediaSoundType,
+	"application/ogg": MediaSoundType, // TODO: ? some .ogg files
+	"video/mp4":       MediaVideoType,
+	"video/mpeg":      MediaVideoType,
+	"video/ogg":       MediaVideoType,
+	"video/webm":      MediaVideoType,
+	"video/x-msvideo": MediaVideoType,
+	"video/mp2t":      MediaVideoType,
+	"video/3gpp":      MediaVideoType,
+	"video/3gpp2":     MediaVideoType,
 }
 
 // --------------------------
@@ -811,43 +1132,20 @@ func formatTimeRequired(min int) string {
 }
 
 // TODO:
-func saveWork(w *Work) {
-	getMockDb().SaveWork(w)
-}
-
-// TODO:
-func saveSeries(s *Series) {
-	getMockDb().SaveSeries(s)
-}
-
-// TODO:
-func saveContent(c Contentable) {
-	switch c.GetType() {
-	case ContentTextType:
-		getMockDb().SaveText(c.(*Text))
-	case ContentSoundType:
-		getMockDb().SaveSound(c.(*Sound))
-	case ContentVideoType:
-		getMockDb().SaveVideo(c.(*Video))
-	case ContentImageType:
-		getMockDb().SaveImage(c.(*Image))
-	default:
-		panic("unknown ContentType when saving content")
-	}
-}
-
-func saveFilter(f *Filter) {
-	getMockDb().SaveFilter(f)
-}
-
-// TODO:
 func getBaseUrl() string {
 	return getMockBaseUrl()
 }
 
 // TODO:
-func createNewWork() *Work {
-	return getMockEmptyWork()
+func getNewFilter() *Filter {
+	return getMockFilter()
+}
+
+// TODO:
+func getAllListings() []Listable {
+	return slices.Collect(
+		maps.Values(getMockDb().Listings),
+	)
 }
 
 // TODO:
@@ -862,12 +1160,37 @@ func getSeries(numbering Numbering) *Series {
 
 // TODO:
 func getContent(id uuid.UUID) Contentable {
-	return getMockDb().Contents[id]
+	return getMockDb().GetContent(id)
+}
+
+// TODO:
+func getText(id uuid.UUID) *Text {
+	return getMockDb().GetText(id)
+}
+
+// TODO:
+func getMedia(id uuid.UUID) Mediable {
+	return getMockDb().GetMedia(id)
+}
+
+// TODO:
+func getSound(id uuid.UUID) *Sound {
+	return getMockDb().GetSound(id)
+}
+
+// TODO:
+func getVideo(id uuid.UUID) *Video {
+	return getMockDb().GetVideo(id)
 }
 
 // TODO:
 func getImage(id uuid.UUID) *Image {
 	return getMockDb().GetImage(id)
+}
+
+// TODO:
+func getFilter(numbering Numbering) *Filter {
+	return getMockDb().GetFilter(numbering)
 }
 
 // Panics if id provided is not parsable as uuid
@@ -883,33 +1206,33 @@ func getUuidFromId(id string) uuid.UUID {
 }
 
 // TODO: improve matching mime -> ContentType
-func getFileContentType(file multipart.File) (ContentType, bool) {
+func getFileMediaType(file multipart.File) (MediaType, bool) {
 	buf := make([]byte, 512)
 	n, _ := file.Read(buf)
 	mimeType := http.DetectContentType(buf[:n])
 	file.Seek(0, io.SeekStart)
-	ct, ok := MimeToContentType[mimeType]
+	mt, ok := MimeToMediaType[mimeType]
 
 	if !ok {
 		log.Println("mime type " + mimeType + " not found in mime map")
 	}
 
-	return ct, ok
+	return mt, ok
 }
 
-func storeUploadedFormFile(r *http.Request) (Contentable, error) {
+func storeUploadedFormFile(r *http.Request) (Mediable, error) {
 	file, header, err := r.FormFile("upload")
 	if err != nil {
 		return nil, err
 	} else {
-		ct, validCt := getFileContentType(file)
-		if !validCt || ct == ContentTextType {
+		mt, validCt := getFileMediaType(file)
+		if !validCt {
 			return nil, errors.New("invalid file type uploaded")
 		}
 
 		defer file.Close()
 
-		localPath := ct.toLocalPath(header.Filename)
+		localPath := mt.toLocalPath(header.Filename)
 
 		dst, err := os.Create(localPath)
 		if err != nil {
@@ -920,29 +1243,22 @@ func storeUploadedFormFile(r *http.Request) (Contentable, error) {
 			io.Copy(dst, file)
 		}
 
-		return ct.createNew([]string{ct.toSourceUrl(header.Filename)}), nil
+		return mt.CreateNew([]string{mt.toSourceUrl(header.Filename)}), nil
 	}
 }
 
-func handleContentUpload(r *http.Request, work *Work) error {
-	content, err := storeUploadedFormFile(r)
+func handleContentUpload(r *http.Request, work *Work, media Mediable) error {
+	idx := media.GetIndex()
+	media, err := storeUploadedFormFile(r)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
 
-	content.SetIndex(len(work.Contents))
-	work.Contents = append(work.Contents, content)
-	saveWork(work)
+	work.Contents[idx] = media
+	work.Save()
 
 	return nil
-}
-
-// TODO:
-func getAllListings() []Listable {
-	return slices.Collect(
-		maps.Values(getMockDb().Listings),
-	)
 }
 
 // Assume Contents is always sorted by index
@@ -981,26 +1297,12 @@ func moveContentDown(w *Work, idx int) {
 	w.Contents[idx], w.Contents[idx+1] = w.Contents[idx+1], w.Contents[idx]
 }
 
-// Assume Contents is always sorted by index with no gaps
-// TODO:
-func deleteContent(w *Work, contentId uuid.UUID) {
-	idx := getContent(contentId).GetIndex()
-	cs := w.Contents
-
-	w.Contents = append(cs[:idx], cs[idx+1:]...)
-	for i := idx; i < len(w.Contents); i++ {
-		w.Contents[i].SetIndex(i)
-	}
-
-	delete(getMockDb().Contents, contentId)
-}
-
 func getHtmlEnvironment() *HtmlEnvironment {
 	return getMockHtmlEnvironment()
 }
 
-func createTemplateData[T any, V []any](data T) TemplateData[T, V] {
-	return TemplateData[T, V]{
+func createTemplateData[T any](data T) TemplateData[T] {
+	return TemplateData[T]{
 		Environment: getHtmlEnvironment(),
 		Data:        data,
 	}
@@ -1028,11 +1330,6 @@ func getSeriesFromRequest(r *http.Request) *Series {
 	}
 
 	return getSeries(numbering)
-}
-
-// TODO:
-func getNewFilter() *Filter {
-	return getMockFilter()
 }
 
 // TODO: for each Numberable?
@@ -1180,15 +1477,6 @@ func viewWorksHandler(w http.ResponseWriter, r *http.Request) {
 func viewWorksGetHandler(w http.ResponseWriter, r *http.Request) {
 	templ := template.Must(template.New("home.html").Funcs(template.FuncMap{
 		"formatTime": formatTimeRequired,
-		"capitalize": func(s string) string {
-			if s == "" {
-				return s
-			}
-
-			r := []rune(s)
-			r[0] = unicode.ToUpper(r[0])
-			return string(r)
-		},
 	}).ParseFiles("./resources/home.html"))
 
 	listings := getAllListings()
@@ -1210,7 +1498,7 @@ func searchWorksHandler(w http.ResponseWriter, r *http.Request) {
 
 func searchWorksNewFilterHandler(w http.ResponseWriter, r *http.Request) {
 	newFilter := getNewFilter()
-	saveFilter(newFilter)
+	newFilter.Save()
 
 	http.Redirect(w, r, r.URL.Path+"/with/filter/"+newFilter.GetNumberingUrlString(), http.StatusSeeOther)
 }
@@ -1287,21 +1575,14 @@ func searchWorksPostHandler(w http.ResponseWriter, r *http.Request) {
 		filter.PreviousTag = ""
 	}
 
-	saveFilter(filter)
+	filter.Save()
 
 	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 }
 
 func viewWorkHandler(w http.ResponseWriter, r *http.Request) {
 	work := getWorkFromRequest(r)
-	templ := template.Must(template.New("work.html").Funcs(template.FuncMap{
-		"isText":             func(ct ContentType) bool { return ct == ContentTextType },
-		"isSound":            func(ct ContentType) bool { return ct == ContentSoundType },
-		"isVideo":            func(ct ContentType) bool { return ct == ContentVideoType },
-		"isImage":            func(ct ContentType) bool { return ct == ContentImageType },
-		"getAllContentTypes": func() []ContentType { return AllContentTypes },
-	}).ParseFiles("./resources/work.html"))
-
+	templ := template.Must(template.New("work.html").ParseFiles("./resources/work.html"))
 	templ.Execute(w, work)
 }
 
@@ -1327,10 +1608,8 @@ func createWorkHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func createNewWorkHandler(w http.ResponseWriter, r *http.Request) {
-
-	newWork := createNewWork()
-	saveWork(newWork)
-
+	newWork := getMockEmptyWork()
+	newWork.Save()
 	http.Redirect(w, r, r.URL.Path+newWork.GetNumberingUrlString(), http.StatusSeeOther)
 }
 
@@ -1344,6 +1623,43 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "content uploaded is too large", http.StatusBadRequest)
 		return
 	}
+
+	// Only when not all contents have been deleted
+	if len(work.Contents) != 0 {
+		for k, v := range r.Form {
+			log.Println(k)
+			if strings.HasPrefix(k, "text[") {
+				id, err := uuid.Parse(k[5:41])
+				if err != nil {
+					panic("unexpected error parsing id for text")
+				}
+
+				text := getText(id)
+				text.Text = v[0]
+
+				log.Printf("text with id %v setting text to %s", text.GetId(), v)
+
+				work.Contents[text.GetIndex()] = text
+				work.Save()
+			}
+
+			if strings.HasPrefix(k, "caption[") {
+				id, err := uuid.Parse(k[8:44])
+				if err != nil {
+					panic("unexpected error parsing id for content")
+				}
+
+				media := getMedia(id)
+				media.SetCaption(&Caption{v[0]})
+				work.Contents[media.GetIndex()] = media
+
+				work.Save()
+			}
+		}
+	}
+
+	title := r.Form["title-text"]
+	work.Title = title[0]
 
 	switch action {
 	case "move-up":
@@ -1370,10 +1686,26 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 			panic("unexpected error parsing uuid for content")
 		}
 
-		deleteContent(work, id)
+		log.Printf("id requested to be deleted %s", actionValue)
+
+		work.Remove(id)
+
+	case "add-media":
+		media := MediaEmptyType.CreateNew(nil)
+		log.Printf("contents nil? %t", work.Contents == nil)
+		media.SetIndex(len(work.Contents))
+
+		work.Contents = append(work.Contents, media)
+		work.Save()
 
 	case "upload":
-		err = handleContentUpload(r, work)
+		id, err := uuid.Parse(actionValue)
+		if err != nil {
+			panic("unexpected error parsing uuid for content")
+		}
+
+		media := getMedia(id)
+		err = handleContentUpload(r, work, media)
 		if err != nil {
 			if errors.Is(err, http.ErrMissingFile) {
 				// TODO: handle better
@@ -1386,31 +1718,33 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "add-text":
-		newText := ContentTextType.createNew([]string{""})
+		newText := ContentTextType.CreateNew()
 		newText.SetIndex(len(work.Contents))
 		work.Contents = append(work.Contents, newText)
-		saveWork(work)
-	}
+		work.Save()
 
-	title := r.Form["title-text"]
-	work.Title = title[0]
-
-	for k, v := range r.Form {
-		log.Println(k)
-		if strings.HasPrefix(k, "text[") {
-			id, err := uuid.Parse(k[5:41])
-			if err != nil {
-				panic("unexpected error parsing id for text")
-			}
-
-			text := getContent(id)
-			text.SetSources(v)
-
-			log.Printf("text with id %v setting text to %s", text.GetId(), v)
-
-			work.Contents[text.GetIndex()] = text
-			saveWork(work)
+	case "add-caption":
+		id, err := uuid.Parse(actionValue)
+		if err != nil {
+			panic("unexpected error parsing uuid for content")
 		}
+
+		content := getMedia(id)
+		text := r.FormValue("added-caption")
+		content.SetCaption(&Caption{text})
+		work.Contents[content.GetIndex()] = content
+		work.Save()
+
+	case "delete-caption":
+		id, err := uuid.Parse(actionValue)
+		if err != nil {
+			panic("unexpected error parsing uuid for content")
+		}
+
+		content := getMedia(id)
+		content.SetCaption(nil)
+		work.Contents[content.GetIndex()] = content
+		work.Save()
 	}
 
 	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
@@ -1430,13 +1764,9 @@ func organizeWorksHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	mux := http.NewServeMux()
 
-	for _, contentType := range AllContentTypes {
-		if contentType == ContentTextType {
-			continue
-		}
-
-		mediaDir := "." + contentType.mediaDir() // ./{resourcefolder}/{media}/{contentType (plural)}/
-		urlPrefix := contentType.urlPrefix()     // /{contentType (singular)}/{with}/{name}/{fileName}/
+	for _, mt := range AllMediaTypes {
+		mediaDir := "." + mt.mediaDir() // ./{resourcefolder}/{media}/{contentType (plural)}/
+		urlPrefix := mt.urlPrefix()     // /{contentType (singular)}/{with}/{name}/{fileName}/
 
 		contentTypeFileServer := http.FileServer(http.Dir(mediaDir))
 		mux.Handle(urlPrefix, http.StripPrefix(urlPrefix, contentTypeFileServer))

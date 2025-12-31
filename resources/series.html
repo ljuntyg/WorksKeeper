@@ -11,7 +11,7 @@
       {{ range .Listings }}
       <tr>
         <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
-        <td><a href="{{ .GetUrl }}">{{ .Title }}</a></td>
+        <td><a href="{{ .GetHrefString }}">{{ .GetTitle }}</a></td>
       </tr>
       {{ end }}
     </table>

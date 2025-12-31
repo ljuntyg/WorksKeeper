@@ -28,13 +28,7 @@
             </button>
           </legend>
           
-          {{ if eq .GetType.SingularString "text" }}
-            <textarea name="text[{{ .GetId }}]">
-              {{ .ToHtml }}
-            </textarea>
-          {{ else }}
-            {{ .ToHtml }}
-          {{ end }}
+          {{ .ToEditableHtml }}
         </fieldset>
         {{ end }}
       </section>
@@ -42,14 +36,22 @@
       <aside>
         <fieldset>
           <legend>
-            Compose work with
-
-            <button type="submit" name="action" value="add-text:{{ .GetId }}">
-              text
-            </button>
+            Compose work
           </legend>
 
-          <fieldset>
+          <button type="submit" name="action" value="add-text:{{ .GetId }}">
+            &
+          </button>
+
+          with text<br>
+
+          <button type="submit" name="action" value="add-media:{{ .GetId }}">
+            &
+          </button>
+
+          with sound, video or image
+
+          <!-- <fieldset>
             <legend>
               with sound, video or image
 
@@ -59,7 +61,7 @@
             </legend>
             
             <input type="file" name="upload" />
-          </fieldset>
+          </fieldset> -->
 
         </fieldset>
       </aside>
