@@ -14,7 +14,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/google/uuid"
 )
@@ -29,14 +28,14 @@ type TemplateData[T any] struct {
 }
 
 type Numbering struct {
-	Century, Year, Day int
+	Type               string
 	Serial             int
 	Random             int
+	Century, Year, Day int
 }
 
 type Numberable interface {
-	GetHrefString() string
-	GetNumberingUrlString() string
+	GetNumberingUrlString() string // Serial gets prefixed by length, 233 -> number 33 (number length 2)
 	GetNumbering() Numbering
 }
 
@@ -70,6 +69,18 @@ type Emptiable interface {
 	Remove(id uuid.UUID)
 }
 
+type HandlerCanvasable interface {
+	HandleCanvasExistingData(w http.ResponseWriter, r *http.Request)
+	HandleCanvasAddText(w http.ResponseWriter, r *http.Request)
+	HandleCanvasAddMedia(w http.ResponseWriter, r *http.Request)
+	HandleCanvasAddCaption(w http.ResponseWriter, r *http.Request)
+	HandleCanvasContentUp(w http.ResponseWriter, r *http.Request)
+	HandleCanvasContentDown(w http.ResponseWriter, r *http.Request)
+	HandleCanvasMediaUpload(w http.ResponseWriter, r *http.Request)
+	HandleCanvasDeleteContent(w http.ResponseWriter, r *http.Request)
+	HandleCanvasDeleteCaption(w http.ResponseWriter, r *http.Request)
+}
+
 type Work struct {
 	Id           uuid.UUID
 	Numbering    Numbering
@@ -79,6 +90,12 @@ type Work struct {
 	IsPublic     bool
 	Contents     []Contentable
 	Tags         []*Tag
+}
+
+type HandlerSearchable interface {
+	HandleSearchAddFilter(w http.ResponseWriter, r *http.Request)
+	HandleSearchRemoveFilter(w http.ResponseWriter, r *http.Request)
+	HandleSearchDoSearch(w http.ResponseWriter, r *http.Request)
 }
 
 type FilterGroup struct {
@@ -248,17 +265,13 @@ func (s *Series) String() string {
 	return b.String()
 }
 
-func (s *Series) GetHrefString() string {
-	return "/series" + s.GetNumberingUrlString()
-}
-
 // TODO: add random
 func (s *Series) GetNumberingUrlString() string {
 	centuryString := fmt.Sprintf("%d%s", s.Numbering.Century, getEnglishNumberSuffix(s.Numbering.Century))
 	yearString := fmt.Sprintf("%d%s", s.Numbering.Year, getEnglishNumberSuffix(s.Numbering.Year))
 	dayString := fmt.Sprintf("%d%s", s.Numbering.Day, getEnglishNumberSuffix(s.Numbering.Day))
 
-	return fmt.Sprintf("/%d/of/%s/century/%s/year/%s/day", s.Numbering.Serial, centuryString, yearString, dayString)
+	return fmt.Sprintf("/%s/%d%d%d/of/%s/century/%s/year/%s/day", s.Numbering.Type, len(strconv.Itoa(s.Numbering.Serial)), s.Numbering.Serial, s.Numbering.Random, centuryString, yearString, dayString)
 }
 
 func (s *Series) GetNumbering() Numbering {
@@ -301,17 +314,13 @@ func (w *Work) String() string {
 	return fmt.Sprintf("Work: %s", w.Title)
 }
 
-func (w *Work) GetHrefString() string {
-	return "/work" + w.GetNumberingUrlString()
-}
-
 // TODO: add random
 func (w *Work) GetNumberingUrlString() string {
 	centuryString := fmt.Sprintf("%d%s", w.Numbering.Century, getEnglishNumberSuffix(w.Numbering.Century))
 	yearString := fmt.Sprintf("%d%s", w.Numbering.Year, getEnglishNumberSuffix(w.Numbering.Year))
 	dayString := fmt.Sprintf("%d%s", w.Numbering.Day, getEnglishNumberSuffix(w.Numbering.Day))
 
-	return fmt.Sprintf("/%d/of/%s/century/%s/year/%s/day", w.Numbering.Serial, centuryString, yearString, dayString)
+	return fmt.Sprintf("/%s/%d%d%d/of/%s/century/%s/year/%s/day", w.Numbering.Type, len(strconv.Itoa(w.Numbering.Serial)), w.Numbering.Serial, w.Numbering.Random, centuryString, yearString, dayString)
 }
 
 func (w *Work) GetNumbering() Numbering {
@@ -338,6 +347,155 @@ func (w *Work) Remove(id uuid.UUID) {
 	w.Save()
 }
 
+func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseMultipartForm(10 << 20) // TODO: increase?
+	if err != nil {
+		http.Error(w, "content uploaded is too large", http.StatusBadRequest)
+		return
+	}
+
+	// Only when not all contents have been deleted
+	if len(work.Contents) != 0 {
+		for k, v := range r.Form {
+			if strings.HasPrefix(k, "text[") {
+				id, err := uuid.Parse(k[5:41])
+				if err != nil {
+					panic("unexpected error parsing id for text")
+				}
+
+				text := getText(id)
+				text.Text = v[0]
+
+				work.Contents[text.GetIndex()] = text
+				work.Save()
+			}
+
+			if strings.HasPrefix(k, "caption[") {
+				id, err := uuid.Parse(k[8:44])
+				if err != nil {
+					panic("unexpected error parsing id for content")
+				}
+
+				media := getMedia(id)
+				media.SetCaption(&Caption{v[0]})
+				work.Contents[media.GetIndex()] = media
+
+				work.Save()
+			}
+		}
+	}
+
+	title := r.Form["title-text"]
+	work.Title = title[0]
+}
+
+func (work *Work) HandleCanvasAddText(w http.ResponseWriter, r *http.Request) {
+	newText := ContentTextType.CreateNew()
+	newText.SetIndex(len(work.Contents))
+	work.Contents = append(work.Contents, newText)
+	work.Save()
+}
+
+func (work *Work) HandleCanvasAddMedia(w http.ResponseWriter, r *http.Request) {
+	media := MediaEmptyType.CreateNew(nil)
+	media.SetIndex(len(work.Contents))
+	work.Contents = append(work.Contents, media)
+	work.Save()
+}
+
+func (work *Work) HandleCanvasAddCaption(w http.ResponseWriter, r *http.Request) {
+	_, actionValue := extractActionAndValueFromRequest(r)
+
+	id := uuid.MustParse(actionValue)
+	content := getMedia(id)
+	text := r.FormValue("added-caption")
+	content.SetCaption(&Caption{text})
+	work.Contents[content.GetIndex()] = content
+	work.Save()
+}
+
+// Assume Contents is always sorted by index
+func (work *Work) HandleCanvasContentUp(w http.ResponseWriter, r *http.Request) {
+	_, actionValue := extractActionAndValueFromRequest(r)
+
+	id := uuid.MustParse(actionValue)
+	content := getContent(id)
+	idx := content.GetIndex()
+	if idx == 0 {
+		return
+	}
+
+	// TODO: remove?
+	for i, c := range work.Contents {
+		if c.GetIndex() != i {
+			panic("contents slice is not sorted by index")
+		}
+	}
+
+	work.Contents[idx].SetIndex(idx - 1)
+	work.Contents[idx-1].SetIndex(idx)
+	work.Contents[idx], work.Contents[idx-1] = work.Contents[idx-1], work.Contents[idx]
+}
+
+// Assume Contents is always sorted by index
+func (work *Work) HandleCanvasContentDown(w http.ResponseWriter, r *http.Request) {
+	_, actionValue := extractActionAndValueFromRequest(r)
+
+	id := uuid.MustParse(actionValue)
+	content := getContent(id)
+	idx := content.GetIndex()
+
+	if idx >= len(work.Contents)-1 {
+		return
+	}
+
+	// TODO: remove?
+	for i, c := range work.Contents {
+		if c.GetIndex() != i {
+			panic("contents slice is not sorted by index")
+		}
+	}
+
+	work.Contents[idx].SetIndex(idx + 1)
+	work.Contents[idx+1].SetIndex(idx)
+	work.Contents[idx], work.Contents[idx+1] = work.Contents[idx+1], work.Contents[idx]
+}
+
+func (work *Work) HandleCanvasMediaUpload(w http.ResponseWriter, r *http.Request) {
+	_, actionValue := extractActionAndValueFromRequest(r)
+
+	id := uuid.MustParse(actionValue)
+	media := getEmptyMedia(id)
+	err := handleContentUpload(r, work, media.GetIndex())
+	if err != nil {
+		if errors.Is(err, http.ErrMissingFile) {
+			// TODO: handle better?
+			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+			return
+		}
+
+		http.Error(w, "error during content upload", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (work *Work) HandleCanvasDeleteContent(w http.ResponseWriter, r *http.Request) {
+	_, actionValue := extractActionAndValueFromRequest(r)
+
+	id := uuid.MustParse(actionValue)
+	work.Remove(id)
+}
+
+func (work *Work) HandleCanvasDeleteCaption(w http.ResponseWriter, r *http.Request) {
+	_, actionValue := extractActionAndValueFromRequest(r)
+
+	id := uuid.MustParse(actionValue)
+	content := getMedia(id)
+	content.SetCaption(nil)
+	work.Contents[content.GetIndex()] = content
+	work.Save()
+}
+
 // ----------------------------------------
 //
 //	TAGS/FILTERS TAGS/FILTERS TAGS/FILTERS
@@ -349,12 +507,45 @@ func (f *Filter) GetNumberingUrlString() string {
 	yearString := fmt.Sprintf("%d%s", f.Numbering.Year, getEnglishNumberSuffix(f.Numbering.Year))
 	dayString := fmt.Sprintf("%d%s", f.Numbering.Day, getEnglishNumberSuffix(f.Numbering.Day))
 
-	return fmt.Sprintf("/%d/of/%s/century/%s/year/%s/day", f.Numbering.Serial, centuryString, yearString, dayString)
+	return fmt.Sprintf("/%s/%d%d%d/of/%s/century/%s/year/%s/day", f.Numbering.Type, len(strconv.Itoa(f.Numbering.Serial)), f.Numbering.Serial, f.Numbering.Random, centuryString, yearString, dayString)
 }
 
 // TODO:
 func (f *Filter) Save() {
 	getMockDb().SaveFilter(f)
+}
+
+func (filter *Filter) HandleSearchAddFilter(w http.ResponseWriter, r *http.Request) {
+	// Extract the tags from the request, because the values in the request might have changed
+	// from the values in the retrieved filter
+	existingTags := extractTagsFromRequest(r)
+	newFilterTag := &Tag{
+		Name: r.FormValue("filter-tag"),
+	}
+
+	existingTags = append(existingTags, newFilterTag)
+	filter.FilterGroups = createFilterGroupsFromTags(existingTags)
+	filter.PreviousTag = newFilterTag.Name
+	filter.Save()
+}
+
+func (filter *Filter) HandleSearchRemoveFilter(w http.ResponseWriter, r *http.Request) {
+	_, actionValue := extractActionAndValueFromRequest(r)
+
+	idx, err := strconv.Atoi(actionValue)
+	if err != nil {
+		panic("unexpected error parsing index for filter to remove")
+	}
+
+	existingTags := extractTagsFromRequest(r)
+	existingTags = append(existingTags[:idx], existingTags[idx+1:]...)
+	filter.FilterGroups = createFilterGroupsFromTags(existingTags)
+	filter.PreviousTag = ""
+	filter.Save()
+}
+
+func (filter *Filter) HandleSearchDoSearch(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func (t *Tag) ToHtml() template.HTML {
@@ -626,6 +817,68 @@ func (m *EmptyMedia) GetEditableCaptionHtml() template.HTML {
 // TODO:
 func (m *EmptyMedia) Save() {
 	getMockDb().SaveEmptyMedia(m)
+}
+
+// TODO: improve matching mime -> ContentType
+func getFileMediaType(file multipart.File) (MediaType, bool) {
+	buf := make([]byte, 512)
+	n, _ := file.Read(buf)
+	mimeType := http.DetectContentType(buf[:n])
+	file.Seek(0, io.SeekStart)
+	mt, ok := MimeToMediaType[mimeType]
+
+	if !ok {
+		log.Println("mime type " + mimeType + " not found in mime map")
+	}
+
+	return mt, ok
+}
+
+func storeUploadedFormFile(r *http.Request, mediaIdx int) (Mediable, error) {
+	file, header, err := r.FormFile("upload")
+	if err != nil {
+		return nil, err
+	} else {
+		mt, validCt := getFileMediaType(file)
+		if !validCt {
+			return nil, errors.New("invalid file type uploaded")
+		}
+
+		defer file.Close()
+
+		localPath := mt.toLocalPath(header.Filename)
+
+		dst, err := os.Create(localPath)
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		} else {
+			defer dst.Close()
+			io.Copy(dst, file)
+		}
+
+		media := mt.CreateNew([]string{mt.toSourceUrl(header.Filename)})
+		media.SetIndex(mediaIdx)
+
+		return media, nil
+	}
+}
+
+func handleContentUpload(r *http.Request, work *Work, mediaIdx int) error {
+	media, err := storeUploadedFormFile(r, mediaIdx)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	work.Contents[mediaIdx] = media
+	work.Save()
+
+	return nil
+}
+
+func (m *EmptyMedia) StoreFile(file multipart.File) {
+
 }
 
 func (s *Sound) GetId() uuid.UUID {
@@ -911,8 +1164,6 @@ const editableCaptionTemplate = `{{ if .Caption }}
 		<button type="submit" name="action" value="delete-caption:{{ .Media.GetId }}">
 			✕
 		</button>
-
-		caption
 	</legend>
 
 	<textarea name="caption[{{ .Media.GetId }}]">
@@ -1174,6 +1425,11 @@ func getMedia(id uuid.UUID) Mediable {
 }
 
 // TODO:
+func getEmptyMedia(id uuid.UUID) *EmptyMedia {
+	return getMockDb().GetEmptyMedia(id)
+}
+
+// TODO:
 func getSound(id uuid.UUID) *Sound {
 	return getMockDb().GetSound(id)
 }
@@ -1193,110 +1449,6 @@ func getFilter(numbering Numbering) *Filter {
 	return getMockDb().GetFilter(numbering)
 }
 
-// Panics if id provided is not parsable as uuid
-func getUuidFromId(id string) uuid.UUID {
-	log.Println("trying to parse id: " + id)
-
-	retId, err := uuid.Parse(id)
-	if err != nil {
-		panic(err)
-	}
-
-	return retId
-}
-
-// TODO: improve matching mime -> ContentType
-func getFileMediaType(file multipart.File) (MediaType, bool) {
-	buf := make([]byte, 512)
-	n, _ := file.Read(buf)
-	mimeType := http.DetectContentType(buf[:n])
-	file.Seek(0, io.SeekStart)
-	mt, ok := MimeToMediaType[mimeType]
-
-	if !ok {
-		log.Println("mime type " + mimeType + " not found in mime map")
-	}
-
-	return mt, ok
-}
-
-func storeUploadedFormFile(r *http.Request) (Mediable, error) {
-	file, header, err := r.FormFile("upload")
-	if err != nil {
-		return nil, err
-	} else {
-		mt, validCt := getFileMediaType(file)
-		if !validCt {
-			return nil, errors.New("invalid file type uploaded")
-		}
-
-		defer file.Close()
-
-		localPath := mt.toLocalPath(header.Filename)
-
-		dst, err := os.Create(localPath)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		} else {
-			defer dst.Close()
-			io.Copy(dst, file)
-		}
-
-		return mt.CreateNew([]string{mt.toSourceUrl(header.Filename)}), nil
-	}
-}
-
-func handleContentUpload(r *http.Request, work *Work, media Mediable) error {
-	idx := media.GetIndex()
-	media, err := storeUploadedFormFile(r)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	work.Contents[idx] = media
-	work.Save()
-
-	return nil
-}
-
-// Assume Contents is always sorted by index
-func moveContentUp(w *Work, idx int) {
-	if idx == 0 {
-		return
-	}
-
-	// TODO: remove
-	for i, c := range w.Contents {
-		if c.GetIndex() != i {
-			panic("contents slice is not sorted by index")
-		}
-	}
-
-	w.Contents[idx].SetIndex(idx - 1)
-	w.Contents[idx-1].SetIndex(idx)
-	w.Contents[idx], w.Contents[idx-1] = w.Contents[idx-1], w.Contents[idx]
-}
-
-// Assume Contents is always sorted by index
-func moveContentDown(w *Work, idx int) {
-	if idx >= len(w.Contents)-1 {
-		return
-	}
-
-	// TODO: remove
-	for i, c := range w.Contents {
-		if c.GetIndex() != i {
-			panic("contents slice is not sorted by index")
-		}
-	}
-
-	w.Contents[idx].SetIndex(idx + 1)
-	w.Contents[idx+1].SetIndex(idx)
-	w.Contents[idx], w.Contents[idx+1] = w.Contents[idx+1], w.Contents[idx]
-}
-
 func getHtmlEnvironment() *HtmlEnvironment {
 	return getMockHtmlEnvironment()
 }
@@ -1312,10 +1464,7 @@ func createTemplateData[T any](data T) TemplateData[T] {
 // /foo/boo/goo/{id} and id must refer to an existing work
 func getWorkFromRequest(r *http.Request) *Work {
 	numberingString := r.PathValue("numbering")
-	numbering, err := urlStringToNumbering(numberingString)
-	if err != nil {
-		panic("unexpected error parsing numbering for work")
-	}
+	numbering := mustUrlStringToNumbering(numberingString, "work")
 
 	return getWork(numbering)
 }
@@ -1324,24 +1473,28 @@ func getWorkFromRequest(r *http.Request) *Work {
 // /foo/boo/goo/{id} and id must refer to an existing series
 func getSeriesFromRequest(r *http.Request) *Series {
 	numberingString := r.PathValue("numbering")
-	numbering, err := urlStringToNumbering(numberingString)
-	if err != nil {
-		panic("unexpected error parsing numbering for series")
-	}
+	numbering := mustUrlStringToNumbering(numberingString, "series")
 
 	return getSeries(numbering)
 }
 
 // TODO: for each Numberable?
-func urlStringToNumbering(s string) (Numbering, error) {
-	// 1/of/21st/century/25th/year/362nd/day
+func urlStringToNumbering(s string, typeString string) (Numbering, error) {
+	// /11222/of/21st/century/25th/year/362nd/day, work
 	parts := strings.Split(s, "/")
-	if len(parts) < 7 {
+	if len(parts) < 8 {
 		return Numbering{}, fmt.Errorf("invalid format: %q", s)
 	}
 
-	serial, err := strconv.Atoi(parts[0])
+	serialAndRandom := parts[0]
+	n, err := strconv.Atoi(serialAndRandom[0:1])
 	if err != nil {
+		return Numbering{}, err
+	}
+
+	serial, err := strconv.Atoi(serialAndRandom[1 : n+1])
+	random, err1 := strconv.Atoi(serialAndRandom[n+1:])
+	if err != nil || err1 != nil {
 		return Numbering{}, err
 	}
 
@@ -1365,7 +1518,18 @@ func urlStringToNumbering(s string) (Numbering, error) {
 		Year:    year,
 		Day:     day,
 		Serial:  serial,
+		Random:  random,
+		Type:    typeString,
 	}, nil
+}
+
+func mustUrlStringToNumbering(s string, typeString string) Numbering {
+	numbering, err := urlStringToNumbering(s, typeString)
+	if err != nil {
+		panic(err)
+	}
+
+	return numbering
 }
 
 // TODO:
@@ -1500,29 +1664,17 @@ func searchWorksNewFilterHandler(w http.ResponseWriter, r *http.Request) {
 	newFilter := getNewFilter()
 	newFilter.Save()
 
-	http.Redirect(w, r, r.URL.Path+"/with/filter/"+newFilter.GetNumberingUrlString(), http.StatusSeeOther)
+	http.Redirect(w, r, r.URL.Path+"/with/"+newFilter.GetNumberingUrlString(), http.StatusSeeOther)
 }
 
 func searchWorksGetHandler(w http.ResponseWriter, r *http.Request) {
 	templ := template.Must(template.New("search.html").Funcs(template.FuncMap{
 		"formatTime": formatTimeRequired,
-		"capitalize": func(s string) string {
-			if s == "" {
-				return s
-			}
-
-			r := []rune(s)
-			r[0] = unicode.ToUpper(r[0])
-			return string(r)
-		},
-		"add": func(a, b int) int { return a + b },
+		"add":        func(a, b int) int { return a + b },
 	}).ParseFiles("./resources/search.html"))
 
 	listings := getAllListings()
-	numbering, err := urlStringToNumbering(r.PathValue("numbering"))
-	if err != nil {
-		panic("unexpected error when trying to get filter")
-	}
+	numbering := mustUrlStringToNumbering(r.PathValue("numbering"), "filter")
 
 	filter := getFilterByNumbering(numbering)
 
@@ -1541,41 +1693,16 @@ func searchWorksGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // TODO: handle search
 func searchWorksPostHandler(w http.ResponseWriter, r *http.Request) {
-	action, actionValue := extractActionAndValueFromRequest(r)
-	numbering, err := urlStringToNumbering(r.PathValue("numbering"))
-	if err != nil {
-		panic("unexpected error when trying to get filter")
-	}
-
+	action, _ := extractActionAndValueFromRequest(r)
+	numbering := mustUrlStringToNumbering(r.PathValue("numbering"), "filter")
 	filter := getFilterByNumbering(numbering)
-	filter.FilterVisibility = r.FormValue("filter-visibility")
 
 	switch action {
 	case "add-filter":
-
-		// Extract the tags from the request, because the values in the request might have changed
-		// from the values in the retrieved filter
-		existingTags := extractTagsFromRequest(r)
-		newFilterTag := &Tag{
-			Name: r.FormValue("filter-tag"),
-		}
-
-		existingTags = append(existingTags, newFilterTag)
-		filter.FilterGroups = createFilterGroupsFromTags(existingTags)
-		filter.PreviousTag = newFilterTag.Name
+		filter.HandleSearchAddFilter(w, r)
 	case "remove-filter":
-		idx, err := strconv.Atoi(actionValue)
-		if err != nil {
-			panic("unexpected error parsing index for filter to remove")
-		}
-
-		existingTags := extractTagsFromRequest(r)
-		existingTags = append(existingTags[:idx], existingTags[idx+1:]...)
-		filter.FilterGroups = createFilterGroupsFromTags(existingTags)
-		filter.PreviousTag = ""
+		filter.HandleSearchRemoveFilter(w, r)
 	}
-
-	filter.Save()
 
 	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 }
@@ -1610,141 +1737,31 @@ func createWorkHandler(w http.ResponseWriter, r *http.Request) {
 func createNewWorkHandler(w http.ResponseWriter, r *http.Request) {
 	newWork := getMockEmptyWork()
 	newWork.Save()
-	http.Redirect(w, r, r.URL.Path+newWork.GetNumberingUrlString(), http.StatusSeeOther)
+	http.Redirect(w, r, "/compose"+newWork.GetNumberingUrlString(), http.StatusSeeOther)
 }
 
 func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
-	action, actionValue := extractActionAndValueFromRequest(r)
+	action, _ := extractActionAndValueFromRequest(r)
 	work := getWorkFromRequest(r)
-
-	err := r.ParseMultipartForm(10 << 20) // TODO: increase?
-	if err != nil {
-		log.Println(err)
-		http.Error(w, "content uploaded is too large", http.StatusBadRequest)
-		return
-	}
-
-	// Only when not all contents have been deleted
-	if len(work.Contents) != 0 {
-		for k, v := range r.Form {
-			log.Println(k)
-			if strings.HasPrefix(k, "text[") {
-				id, err := uuid.Parse(k[5:41])
-				if err != nil {
-					panic("unexpected error parsing id for text")
-				}
-
-				text := getText(id)
-				text.Text = v[0]
-
-				log.Printf("text with id %v setting text to %s", text.GetId(), v)
-
-				work.Contents[text.GetIndex()] = text
-				work.Save()
-			}
-
-			if strings.HasPrefix(k, "caption[") {
-				id, err := uuid.Parse(k[8:44])
-				if err != nil {
-					panic("unexpected error parsing id for content")
-				}
-
-				media := getMedia(id)
-				media.SetCaption(&Caption{v[0]})
-				work.Contents[media.GetIndex()] = media
-
-				work.Save()
-			}
-		}
-	}
-
-	title := r.Form["title-text"]
-	work.Title = title[0]
+	work.HandleCanvasExistingData(w, r)
 
 	switch action {
-	case "move-up":
-		id, err := uuid.Parse(actionValue)
-		if err != nil {
-			panic("unexpected error parsing uuid for content")
-		}
-
-		content := getContent(id)
-		moveContentUp(work, content.GetIndex())
-
-	case "move-down":
-		id, err := uuid.Parse(actionValue)
-		if err != nil {
-			panic("unexpected error parsing uuid for content")
-		}
-
-		content := getContent(id)
-		moveContentDown(work, content.GetIndex())
-
-	case "delete-content":
-		id, err := uuid.Parse(actionValue)
-		if err != nil {
-			panic("unexpected error parsing uuid for content")
-		}
-
-		log.Printf("id requested to be deleted %s", actionValue)
-
-		work.Remove(id)
-
-	case "add-media":
-		media := MediaEmptyType.CreateNew(nil)
-		log.Printf("contents nil? %t", work.Contents == nil)
-		media.SetIndex(len(work.Contents))
-
-		work.Contents = append(work.Contents, media)
-		work.Save()
-
-	case "upload":
-		id, err := uuid.Parse(actionValue)
-		if err != nil {
-			panic("unexpected error parsing uuid for content")
-		}
-
-		media := getMedia(id)
-		err = handleContentUpload(r, work, media)
-		if err != nil {
-			if errors.Is(err, http.ErrMissingFile) {
-				// TODO: handle better
-				http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
-				break
-			}
-
-			http.Error(w, "error during content upload", http.StatusInternalServerError)
-			return
-		}
-
 	case "add-text":
-		newText := ContentTextType.CreateNew()
-		newText.SetIndex(len(work.Contents))
-		work.Contents = append(work.Contents, newText)
-		work.Save()
-
+		work.HandleCanvasAddText(w, r)
+	case "add-media":
+		work.HandleCanvasAddMedia(w, r)
 	case "add-caption":
-		id, err := uuid.Parse(actionValue)
-		if err != nil {
-			panic("unexpected error parsing uuid for content")
-		}
-
-		content := getMedia(id)
-		text := r.FormValue("added-caption")
-		content.SetCaption(&Caption{text})
-		work.Contents[content.GetIndex()] = content
-		work.Save()
-
+		work.HandleCanvasAddCaption(w, r)
+	case "move-up":
+		work.HandleCanvasContentUp(w, r)
+	case "move-down":
+		work.HandleCanvasContentDown(w, r)
+	case "upload":
+		work.HandleCanvasMediaUpload(w, r)
+	case "delete-content":
+		work.HandleCanvasDeleteContent(w, r)
 	case "delete-caption":
-		id, err := uuid.Parse(actionValue)
-		if err != nil {
-			panic("unexpected error parsing uuid for content")
-		}
-
-		content := getMedia(id)
-		content.SetCaption(nil)
-		work.Contents[content.GetIndex()] = content
-		work.Save()
+		work.HandleCanvasDeleteCaption(w, r)
 	}
 
 	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
@@ -1758,7 +1775,7 @@ func createWorkGetHandler(w http.ResponseWriter, r *http.Request) {
 
 // TODO:
 func organizeWorksHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("hi")
+	panic("organize handler not implemented")
 }
 
 func main() {

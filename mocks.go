@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"maps"
 	"math/rand"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,6 +29,7 @@ type Database interface {
 	GetContent(id uuid.UUID) Contentable
 	GetText(id uuid.UUID) *Text
 	GetMedia(id uuid.UUID) Mediable
+	GetEmptyMedia(id uuid.UUID) *EmptyMedia
 	GetSound(id uuid.UUID) *Sound
 	GetVideo(id uuid.UUID) *Video
 	GetImage(id uuid.UUID) *Image
@@ -262,6 +265,20 @@ func (db *WorksKeeperDB) GetMedia(id uuid.UUID) Mediable {
 	return m
 }
 
+func (db *WorksKeeperDB) GetEmptyMedia(id uuid.UUID) *EmptyMedia {
+	c, ok := db.Contents[id]
+	if !ok {
+		panic("GetEmptyMedia: no content with that ID")
+	}
+
+	m, ok := c.(*EmptyMedia)
+	if !ok {
+		panic(fmt.Sprintf("GetEmptyMedia: content %T is not EmptyMedia", c))
+	}
+
+	return m
+}
+
 func (db *WorksKeeperDB) GetImage(id uuid.UUID) *Image {
 	v, ok := db.Contents[id]
 	if !ok {
@@ -424,7 +441,7 @@ func getMockWork() *Work {
 		Length:    1030,
 		Contents:  getMockContents(),
 		Id:        uuid.New(),
-		Numbering: getMockNumbering(&currentWork),
+		Numbering: getMockNumbering(&currentWork, "work"),
 		Tags:      getMockTags(),
 		IsPublic:  true,
 	}
@@ -438,7 +455,7 @@ func getMockEmptyWork() *Work {
 		Length:    0,
 		Contents:  []Contentable{},
 		Id:        uuid.New(),
-		Numbering: getMockNumbering(&currentWork),
+		Numbering: getMockNumbering(&currentWork, "work"),
 	}
 }
 
@@ -476,13 +493,13 @@ func getMockSeries() *Series {
 		Title:     fmt.Sprintf("Mock series #%d", currentSeries),
 		Listings:  getMockListings(maxSeriesListings),
 		Id:        uuid.New(),
-		Numbering: getMockNumbering(&currentSeries),
+		Numbering: getMockNumbering(&currentSeries, "series"),
 		Tags:      getMockTags(),
 		IsPublic:  true,
 	}
 }
 
-func getMockNumbering(typeCounter *int) Numbering {
+func getMockNumbering(typeCounter *int, typeString string) Numbering {
 	*typeCounter++
 
 	timestamp := time.Now()
@@ -493,10 +510,12 @@ func getMockNumbering(typeCounter *int) Numbering {
 	day := timestamp.YearDay()
 
 	return Numbering{
+		Type:    typeString,
 		Century: century,
 		Year:    centuryYear,
 		Day:     day,
 		Serial:  *typeCounter,
+		Random:  getRandomIntWithLength(3),
 	}
 }
 
@@ -505,7 +524,7 @@ func getMockFilter() *Filter {
 
 	return &Filter{
 		Id:           uuid.New(),
-		Numbering:    getMockNumbering(&currentFilter),
+		Numbering:    getMockNumbering(&currentFilter, "filter"),
 		FilterGroups: createFilterGroupsFromTags(getMockTags()),
 	}
 }
@@ -569,4 +588,20 @@ func getMockBaseUrl() string {
 func getMockHtmlEnvironment() *HtmlEnvironment {
 	log.Println("calling MOCK getMockHtmlEnvironment()")
 	return mockHtmlEnvironment
+}
+
+func getRandomIntWithLength(n int) int {
+	log.Println("calling MOCK getRandomIntWithLength()")
+
+	var buf bytes.Buffer
+	for range n {
+		buf.WriteString(fmt.Sprintf("%d", rng.Intn(9)+1))
+	}
+
+	ret, err := strconv.Atoi(buf.String())
+	if err != nil {
+		panic("unexpected error creating random int")
+	}
+
+	return ret
 }
