@@ -35,7 +35,7 @@ type Numbering struct {
 }
 
 type Numberable interface {
-	GetNumberingUrlString() string // Serial gets prefixed by length, 233 -> number 33 (number length 2)
+	GetNumberingUrlString() string
 	GetNumbering() Numbering
 }
 
@@ -265,13 +265,12 @@ func (s *Series) String() string {
 	return b.String()
 }
 
-// TODO: add random
 func (s *Series) GetNumberingUrlString() string {
 	centuryString := fmt.Sprintf("%d%s", s.Numbering.Century, getEnglishNumberSuffix(s.Numbering.Century))
 	yearString := fmt.Sprintf("%d%s", s.Numbering.Year, getEnglishNumberSuffix(s.Numbering.Year))
 	dayString := fmt.Sprintf("%d%s", s.Numbering.Day, getEnglishNumberSuffix(s.Numbering.Day))
 
-	return fmt.Sprintf("/%s/%d%d%d/of/%s/century/%s/year/%s/day", s.Numbering.Type, len(strconv.Itoa(s.Numbering.Serial)), s.Numbering.Serial, s.Numbering.Random, centuryString, yearString, dayString)
+	return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", s.Numbering.Type, s.Numbering.Random, s.Numbering.Serial, centuryString, yearString, dayString)
 }
 
 func (s *Series) GetNumbering() Numbering {
@@ -314,13 +313,12 @@ func (w *Work) String() string {
 	return fmt.Sprintf("Work: %s", w.Title)
 }
 
-// TODO: add random
 func (w *Work) GetNumberingUrlString() string {
 	centuryString := fmt.Sprintf("%d%s", w.Numbering.Century, getEnglishNumberSuffix(w.Numbering.Century))
 	yearString := fmt.Sprintf("%d%s", w.Numbering.Year, getEnglishNumberSuffix(w.Numbering.Year))
 	dayString := fmt.Sprintf("%d%s", w.Numbering.Day, getEnglishNumberSuffix(w.Numbering.Day))
 
-	return fmt.Sprintf("/%s/%d%d%d/of/%s/century/%s/year/%s/day", w.Numbering.Type, len(strconv.Itoa(w.Numbering.Serial)), w.Numbering.Serial, w.Numbering.Random, centuryString, yearString, dayString)
+	return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", w.Numbering.Type, w.Numbering.Random, w.Numbering.Serial, centuryString, yearString, dayString)
 }
 
 func (w *Work) GetNumbering() Numbering {
@@ -507,7 +505,7 @@ func (f *Filter) GetNumberingUrlString() string {
 	yearString := fmt.Sprintf("%d%s", f.Numbering.Year, getEnglishNumberSuffix(f.Numbering.Year))
 	dayString := fmt.Sprintf("%d%s", f.Numbering.Day, getEnglishNumberSuffix(f.Numbering.Day))
 
-	return fmt.Sprintf("/%s/%d%d%d/of/%s/century/%s/year/%s/day", f.Numbering.Type, len(strconv.Itoa(f.Numbering.Serial)), f.Numbering.Serial, f.Numbering.Random, centuryString, yearString, dayString)
+	return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", f.Numbering.Type, f.Numbering.Random, f.Numbering.Serial, centuryString, yearString, dayString)
 }
 
 // TODO:
@@ -1479,6 +1477,7 @@ func getSeriesFromRequest(r *http.Request) *Series {
 }
 
 // TODO: for each Numberable?
+// TODO: variable number of random? fixed to 3 now, or break out into a struct/interface with an attribute
 func urlStringToNumbering(s string, typeString string) (Numbering, error) {
 	// /11222/of/21st/century/25th/year/362nd/day, work
 	parts := strings.Split(s, "/")
@@ -1487,13 +1486,8 @@ func urlStringToNumbering(s string, typeString string) (Numbering, error) {
 	}
 
 	serialAndRandom := parts[0]
-	n, err := strconv.Atoi(serialAndRandom[0:1])
-	if err != nil {
-		return Numbering{}, err
-	}
-
-	serial, err := strconv.Atoi(serialAndRandom[1 : n+1])
-	random, err1 := strconv.Atoi(serialAndRandom[n+1:])
+	random, err1 := strconv.Atoi(serialAndRandom[:3])
+	serial, err := strconv.Atoi(serialAndRandom[3:])
 	if err != nil || err1 != nil {
 		return Numbering{}, err
 	}

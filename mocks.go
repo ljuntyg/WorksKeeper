@@ -515,7 +515,7 @@ func getMockNumbering(typeCounter *int, typeString string) Numbering {
 		Year:    centuryYear,
 		Day:     day,
 		Serial:  *typeCounter,
-		Random:  getRandomIntWithLength(3),
+		Random:  getMockNumberingRandom(),
 	}
 }
 
@@ -590,11 +590,11 @@ func getMockHtmlEnvironment() *HtmlEnvironment {
 	return mockHtmlEnvironment
 }
 
-func getRandomIntWithLength(n int) int {
-	log.Println("calling MOCK getRandomIntWithLength()")
+func getMockNumberingRandom() int {
+	log.Println("calling MOCK getMockNumberingRandom()")
 
 	var buf bytes.Buffer
-	for range n {
+	for range 3 {
 		buf.WriteString(fmt.Sprintf("%d", rng.Intn(9)+1))
 	}
 
