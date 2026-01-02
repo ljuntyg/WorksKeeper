@@ -300,11 +300,13 @@ func (s *Series) String() string {
 }
 
 func (s *Series) GetNumberingUrlString() string {
-	centuryString := fmt.Sprintf("%d%s", s.Numbering.Century, getEnglishNumberSuffix(s.Numbering.Century))
+	/* centuryString := fmt.Sprintf("%d%s", s.Numbering.Century, getEnglishNumberSuffix(s.Numbering.Century))
 	yearString := fmt.Sprintf("%d%s", s.Numbering.Year, getEnglishNumberSuffix(s.Numbering.Year))
-	dayString := fmt.Sprintf("%d%s", s.Numbering.Day, getEnglishNumberSuffix(s.Numbering.Day))
+	dayString := fmt.Sprintf("%d%s", s.Numbering.Day, getEnglishNumberSuffix(s.Numbering.Day)) */
 
-	return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", s.Numbering.Type, s.Numbering.Random, s.Numbering.Serial, centuryString, yearString, dayString)
+	// return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", s.Numbering.Type, s.Numbering.Random, s.Numbering.Serial, centuryString, yearString, dayString)
+
+	return s.Numbering.numberingToUrlString()
 }
 
 func (s *Series) GetNumbering() Numbering {
@@ -348,11 +350,13 @@ func (w *Work) String() string {
 }
 
 func (w *Work) GetNumberingUrlString() string {
-	centuryString := fmt.Sprintf("%d%s", w.Numbering.Century, getEnglishNumberSuffix(w.Numbering.Century))
+	/* centuryString := fmt.Sprintf("%d%s", w.Numbering.Century, getEnglishNumberSuffix(w.Numbering.Century))
 	yearString := fmt.Sprintf("%d%s", w.Numbering.Year, getEnglishNumberSuffix(w.Numbering.Year))
-	dayString := fmt.Sprintf("%d%s", w.Numbering.Day, getEnglishNumberSuffix(w.Numbering.Day))
+	dayString := fmt.Sprintf("%d%s", w.Numbering.Day, getEnglishNumberSuffix(w.Numbering.Day)) */
 
-	return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", w.Numbering.Type, w.Numbering.Random, w.Numbering.Serial, centuryString, yearString, dayString)
+	// return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", w.Numbering.Type, w.Numbering.Random, w.Numbering.Serial, centuryString, yearString, dayString)
+
+	return w.Numbering.numberingToUrlString()
 }
 
 func (w *Work) GetNumbering() Numbering {
@@ -644,11 +648,13 @@ func (work *Work) HandleCanvasDeleteHorizontal(w http.ResponseWriter, r *http.Re
 // \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 
 func (f *Filter) GetNumberingUrlString() string {
-	centuryString := fmt.Sprintf("%d%s", f.Numbering.Century, getEnglishNumberSuffix(f.Numbering.Century))
+	/* centuryString := fmt.Sprintf("%d%s", f.Numbering.Century, getEnglishNumberSuffix(f.Numbering.Century))
 	yearString := fmt.Sprintf("%d%s", f.Numbering.Year, getEnglishNumberSuffix(f.Numbering.Year))
-	dayString := fmt.Sprintf("%d%s", f.Numbering.Day, getEnglishNumberSuffix(f.Numbering.Day))
+	dayString := fmt.Sprintf("%d%s", f.Numbering.Day, getEnglishNumberSuffix(f.Numbering.Day)) */
 
-	return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", f.Numbering.Type, f.Numbering.Random, f.Numbering.Serial, centuryString, yearString, dayString)
+	// return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", f.Numbering.Type, f.Numbering.Random, f.Numbering.Serial, centuryString, yearString, dayString)
+
+	return f.Numbering.numberingToUrlString()
 }
 
 // TODO:
@@ -1486,9 +1492,10 @@ func getSeriesFromRequest(r *http.Request) *Series {
 // TODO: for each Numberable?
 // TODO: variable number of random? fixed to 3 now, or break out into a struct/interface with an attribute
 func urlStringToNumbering(s string, typeString string) (Numbering, error) {
-	// /11222/of/21st/century/25th/year/362nd/day, work
+	// XX /11222/of/21st/century/25th/year/362nd/day, work
+	// /11222/21/25/362, work
 	parts := strings.Split(s, "/")
-	if len(parts) < 8 {
+	if len(parts) != 4 {
 		return Numbering{}, fmt.Errorf("invalid format: %q", s)
 	}
 
@@ -1499,17 +1506,17 @@ func urlStringToNumbering(s string, typeString string) (Numbering, error) {
 		return Numbering{}, err
 	}
 
-	century, err := strconv.Atoi(strings.TrimRight(parts[2], "stndrh"))
+	century, err := strconv.Atoi(strings.TrimRight(parts[1], "stndrh"))
 	if err != nil {
 		return Numbering{}, err
 	}
 
-	year, err := strconv.Atoi(strings.TrimRight(parts[4], "stndrh"))
+	year, err := strconv.Atoi(strings.TrimRight(parts[2], "stndrh"))
 	if err != nil {
 		return Numbering{}, err
 	}
 
-	day, err := strconv.Atoi(strings.TrimRight(parts[6], "stndrh"))
+	day, err := strconv.Atoi(strings.TrimRight(parts[3], "stndrh"))
 	if err != nil {
 		return Numbering{}, err
 	}
@@ -1595,6 +1602,42 @@ func createFilterGroupsFromTags(tags []*Tag) []*FilterGroup {
 	}
 
 	return filterGroups
+}
+
+func mustCombineNumbers(numbers []int) int {
+	numStrings := make([]string, len(numbers))
+	for i, num := range numbers {
+		numStrings[i] = strconv.Itoa(num)
+	}
+
+	numString := strings.Join(numStrings, "")
+	combined, err := strconv.Atoi(numString)
+	if err != nil {
+		panic("unexpected error combining numbers")
+	}
+
+	return combined
+}
+
+func (n Numbering) numberingToUrlString() string {
+	/* centuryString := fmt.Sprintf("%d%s", f.Numbering.Century, getEnglishNumberSuffix(f.Numbering.Century))
+	yearString := fmt.Sprintf("%d%s", f.Numbering.Year, getEnglishNumberSuffix(f.Numbering.Year))
+	dayString := fmt.Sprintf("%d%s", f.Numbering.Day, getEnglishNumberSuffix(f.Numbering.Day)) */
+
+	// return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", f.Numbering.Type, f.Numbering.Random, f.Numbering.Serial, centuryString, yearString, dayString)
+
+	// 64 bits (8 B):
+	// Random1[4] Random2[4] Random3[4] Serial[12] Century[6] Year[7] Day[9]
+
+	var numBuf int64
+	var buf bytes.Bu
+	numBuf = 10000
+
+	centuryString := strconv.Itoa(n.Century)
+	yearString := strconv.Itoa(n.Year)
+	dayString := strconv.Itoa(n.Day)
+
+	return fmt.Sprintf("/%s/%d%d/%s/%s/%s", n.Type, n.Random, n.Serial, centuryString, yearString, dayString)
 }
 
 // ----------------------------
