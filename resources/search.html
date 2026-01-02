@@ -19,72 +19,59 @@
     <aside>
       <form method="post">
         <fieldset>
-          <legend>
-            {{ if $.Data.Filter.FilterGroups }}
-            <button type="submit" name="action" value="search:">
-              Search
-            </button>
-            {{ else }}
-            Search
-            {{ end }}
+          <menu>
+            <li>
+              <select name="filter-tag">
+                {{ range .Environment.AllTags }}
+                <option value="{{ .Name }}"
+                  {{ if eq .Name $.Data.Filter.PreviousTag }}selected{{ end }}>
+                  {{ .Name }}
+                </option>
+                {{ end }}
+              </select>
+    
+              <button type="submit" name="action" value="add-filter:">
+                & new filter
+              </button>
+            </li>
+          </menu>
 
-            works
-
-            <select name="filter-visibility">
-              <option value="filter-private" 
-                {{ if eq "filter-private" $.Data.Filter.FilterVisibility }}selected{{ end }}>
-                privately
-              </option>
-              <option value="filter-public"
-                {{ if eq "filter-public" $.Data.Filter.FilterVisibility }}selected{{ end }}>
-                publicly
-              </option>
-            </select>
-          </legend>
-
-          <button type="submit" name="action" value="add-filter:">
-            &
-          </button>
-
-          with
-
-          <select name="filter-tag">
-            {{ range .Environment.AllTags }}
-            <option value="{{ .Name }}"
-              {{ if eq .Name $.Data.Filter.PreviousTag }}selected{{ end }}>
-              {{ .Name }}
-            </option>
-            {{ end }}
-          </select>
-
+          {{ with .Data.Filter.FilterGroups }}
           <ul>
-            <!-- list already added filters -->
-            {{ with .Data.Filter }}
-
-              <!-- TODO: use Id for tags instead -->
-              {{ $globalIdx := 0 }}
-
-              {{ range .FilterGroups }}
-
+          <!-- list already added filters -->
+            <!-- TODO: use Id for tags instead -->
+            {{ $globalIdx := 0 }}
+            {{ range . }}
+            <li>
               <fieldset>
-                <legend>{{ .Name }}</legend>
+
+                <legend>
+                  {{ .Name }}
+                </legend>
                 
                 {{ range .Tags  }}
                 <li>
+                  {{ .ToHtml }}
+                  
                   <button type="submit" name="action" value="remove-filter:{{ $globalIdx }}">
                     ✕
                   </button>
-
-                  {{ .ToHtml }}
+  
+                  {{ $globalIdx = add $globalIdx 1 }}
                 </li>
-
-                {{ $globalIdx = add $globalIdx 1 }}
                 {{ end }}
-              </fieldset>
 
-              {{ end }}
+              </fieldset>
+            </li>
             {{ end }}
+
           </ul>
+          {{ end }}
+
+          <button type="submit" name="action" value="search:">
+            Search works
+          </button>
+
         </fieldset>
       </form>
     </aside>
