@@ -69,9 +69,13 @@
       <aside>
         <fieldset>
           <legend>
+            {{ if ne $nbrRows 0 }}
             <button type="submit" name="action" value="save:">
-            Save
-          </button>
+              Save
+            </button>
+            {{ else }}
+            Compose
+            {{ end }}
 
             work
           </legend>
@@ -89,6 +93,7 @@
 
           with sound, video or image
 
+          {{ if ne $nbrRows 0 }}
           <br>
           or
           <button type="submit" name="action" value="view:">
@@ -96,6 +101,7 @@
           </button>
 
           work
+          {{ end }}
         </fieldset>
       </aside>
     </form>
