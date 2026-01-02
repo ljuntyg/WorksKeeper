@@ -1,0 +1,34 @@
+<select name="mode-modifier">
+	{{ range .GetPossibleModeModifiers}}
+	<option value="{{ . }}"
+		{{ if eq . $.FilterMode }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<select name="filter-mode">
+	{{ range .GetPossibleFilterModes }}
+	<option value="{{ . }}"
+		{{ if eq . $.FilterMode }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<!-- assumes .PossibleValues for a length tag is a slice of ordered values (with min and max) -->
+<datalist id="length-datalist">
+	{{ range .GetPossibleValues }}
+	<option value="{{ . }}"></option>
+	{{ end }}
+</datalist>
+
+<input 
+	type="range" 
+	list="length-datalist" 
+	name="added-filters.value" 
+	value="{{ .Value }}"	
+/>
+
+<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
+<!-- TODO: add remove button, search button -->

@@ -20,13 +20,13 @@
             ✕
           </button>
 
-          {{ if ne ($first.GetVertical.Index) 0 }}
+          {{ if ne $first.GetVertical 0 }}
           <button type="submit" name="action" value="move-up:{{ $first.GetId }}">
             ↑
           </button>
           {{ end }}
 
-          {{ if ne (add $first.GetVertical.Index 1) $nbrRows }}
+          {{ if ne (add $first.GetVertical 1) $nbrRows }}
           <button type="submit" name="action" value="move-down:{{ $first.GetId }}">
             ↓
           </button>
@@ -46,13 +46,13 @@
                 ✕
               </button>
 
-              {{ if ne .GetPosition.Horizontal.Index 0 }}
+              {{ if ne .GetHorizontal 0 }}
               <button type="submit" name="action" value="horizontal-left:{{ .GetId }}">
                 ←
               </button>
               {{ end }}
 
-              {{ if ne (add .GetPosition.Horizontal.Index 1) $rowLen }}
+              {{ if ne (add .GetHorizontal 1) $rowLen }}
               <button type="submit" name="action" value="horizontal-right:{{ .GetId }}">
                 →
               </button>
@@ -94,6 +94,7 @@
           with sound, video or image
 
           {{ if ne $nbrRows 0 }}
+          <br>
           <br>
           or
           <button type="submit" name="action" value="view:">

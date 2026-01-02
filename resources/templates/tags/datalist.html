@@ -1,0 +1,24 @@
+<datalist id="tag-values-{{ .Name }}">
+	{{ range .GetPossibleValues }}
+	<option value="{{ . }}"></option>
+	{{ end }}
+</datalist>
+
+<select name="mode-modifier">
+	{{ range .GetPossibleModeModifiers}}
+	<option value="{{ . }}"
+		{{ if eq . $.ModeModifier }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<input 
+	list="tag-values-{{ .Name }}" 
+	name="added-filters.value" 
+	value="{{ .Value }}"
+/>
+
+<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
+<input type="hidden" name="filter-mode" value="" />
+<!-- TODO: add remove button, search button -->

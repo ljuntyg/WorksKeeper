@@ -1,0 +1,10 @@
+<figure>
+	<audio controls>
+		{{ range .GetSources }}
+		<source src={{ . }}>
+		{{ end }}
+		Your browser doesn't support this audio.
+	</audio>
+	
+	{{ .GetCaptionHtml }}
+</figure>

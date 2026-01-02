@@ -1,0 +1,26 @@
+<select name="mode-modifier">
+	{{ range .GetPossibleModeModifiers}}
+	<option value="{{ . }}"
+		{{ if eq . $.ModeModifier }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<select name="filter-mode">
+	{{ range .GetPossibleFilterModes }}
+	<option value="{{ . }}"
+		{{ if eq . $.FilterMode }}selected{{ end }}>
+		{{ . }}
+	</option>
+	{{ end }}
+</select>
+
+<input 
+	type="date"  
+	name="added-filters.value" 
+	value="{{ .Value }}"
+/>
+
+<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
+<!-- TODO: add remove button, search button -->

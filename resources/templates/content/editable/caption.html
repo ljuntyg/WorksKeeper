@@ -1,0 +1,30 @@
+<!-- MediableCaption is passed in -->
+{{ if .Caption }}
+<fieldset>
+	<legend>
+		<button type="submit" name="action" value="delete-caption:{{ .Media.GetId }}">
+			✕
+		</button>
+	</legend>
+
+	<textarea name="caption[{{ .Media.GetId }}]">
+		{{ .Caption.Text }}
+	</textarea>
+</fieldset>
+{{ else }}
+<br>
+<button type="submit" name="action" value="add-caption:{{ .Media.GetId }}">
+	&
+</button>
+
+with caption
+<br>
+{{ end }}
+ 
+{{ if eq .Media.GetHorizontal 0 }}
+<button type="submit" name="action" value="add-horizontal:{{ .Media.GetId }}">
+	&
+</button>
+
+with horizontal
+{{ end }}

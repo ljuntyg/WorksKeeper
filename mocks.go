@@ -111,11 +111,11 @@ func init() {
 	}
 
 	for range maxWorks / 3 {
-		mockDb.SaveSeries(getMockSeries())
+		getMockSeries()
 	}
 
 	for range 2 * maxWorks / 3 {
-		mockDb.SaveWork(getMockWork())
+		getMockWork()
 	}
 }
 
@@ -425,16 +425,12 @@ func getMockContents() [][]Contentable {
 		if pickMedia == 1 {
 			t := AllMediaTypes[rng.Intn(len(AllMediaTypes))]
 			contents[i][0] = t.GetMock(Position{
-				Vertical: Vertical{
-					Index: i,
-				},
+				Vertical: i,
 			})
 		} else {
 			t := AllContentTypes[rng.Intn(len(AllContentTypes))]
 			contents[i][0] = t.GetMock(Position{
-				Vertical: Vertical{
-					Index: i,
-				},
+				Vertical: i,
 			})
 		}
 	}
@@ -447,15 +443,22 @@ func getMockWork() *Work {
 
 	currentWork++
 
-	return &Work{
+	contents := getMockContents()
+
+	work := &Work{
 		Title:     fmt.Sprintf("Mock work #%d", currentWork),
 		Length:    1030,
-		Contents:  getMockContents(),
 		Id:        uuid.New(),
 		Numbering: getMockNumbering(&currentWork, "work"),
 		Tags:      getMockTags(),
 		IsPublic:  true,
 	}
+
+	for _, c := range contents {
+		work.AddContent(c[0])
+	}
+
+	return work
 }
 
 func getMockEmptyWork() *Work {

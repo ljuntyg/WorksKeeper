@@ -1,0 +1,10 @@
+<figure>
+	<video controls>
+		{{ range .GetSources }}
+		<source src={{ . }}>
+		{{ end }}
+		Your browser doesn't support this video.
+	</video>
+
+	{{ .GetEditableCaptionHtml }}
+</figure>

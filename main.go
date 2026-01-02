@@ -69,7 +69,7 @@ type Matrixable interface {
 	RemoveContent(c Contentable)
 	RemoveMedia(m Mediable)
 	AddContent(c Contentable)
-	AddHorizontal(m Mediable, vert Vertical)
+	AddHorizontal(m Mediable, vert int)
 	MoveUp(c Contentable)
 	MoveDown(c Contentable)
 	MoveLeft(m Mediable)
@@ -101,7 +101,7 @@ type Work struct {
 	Title        string
 	Length       int
 	IsPublic     bool
-	Contents     [][]Contentable // [Vertical.Index][Horizontal.Index]
+	Contents     [][]Contentable // [Vertical][Horizontal]
 	Tags         []*Tag
 }
 
@@ -124,10 +124,14 @@ type Filter struct {
 	PreviousTag      string // Name of previous Tag added to the filter, or "" if a Tag was removed or none have been added
 }
 
+type Pathable interface {
+	GetName(prefix string) string
+	GetPath(fileName string) string
+}
+
 type Templatable interface {
+	Pathable
 	ToHtml() template.HTML
-	GetHtmlTemplateString() string
-	GetTemplateName() string
 }
 
 type Tag struct {
@@ -146,12 +150,12 @@ type TagValues struct {
 }
 
 type Editable interface {
+	Pathable
 	ToEditableHtml() template.HTML
-	GetEditableHtmlTemplateString() string
 }
 
 type Verticable interface {
-	GetVertical() Vertical
+	GetVertical() int
 	SetVertical(vertical int)
 }
 
@@ -168,7 +172,7 @@ type Text struct {
 	Id       uuid.UUID
 	Work     *Work
 	Text     string
-	Vertical Vertical
+	Vertical int
 }
 
 type Caption struct {
@@ -180,21 +184,14 @@ type Captionable interface {
 	GetEditableCaptionHtml() template.HTML
 }
 
-type Vertical struct {
-	Index int
-}
-
-type Horizontal struct {
-	Index int
-}
-
 type Position struct {
-	Vertical   Vertical
-	Horizontal Horizontal
+	Vertical   int
+	Horizontal int
 }
 
 type Positionable interface {
 	Verticable
+	GetHorizontal() int
 	GetPosition() Position
 	SetPosition(vertical int, horizontal int)
 }
@@ -370,7 +367,7 @@ func (w *Work) Save() {
 // Assume we want no nil gaps in the matrix
 // TODO: must reorder every time?
 func (w *Work) RemoveContent(c Contentable) {
-	vert := c.GetVertical().Index
+	vert := c.GetVertical()
 
 	w.Contents = append(
 		w.Contents[:vert],
@@ -388,8 +385,8 @@ func (w *Work) RemoveContent(c Contentable) {
 
 func (w *Work) RemoveMedia(m Mediable) {
 	pos := m.GetPosition()
-	vert := pos.Vertical.Index
-	hor := pos.Horizontal.Index
+	vert := pos.Vertical
+	hor := pos.Horizontal
 	row := w.Contents[vert]
 
 	row = append(row[:hor], row[hor+1:]...)
@@ -411,18 +408,18 @@ func (w *Work) AddContent(c Contentable) {
 	w.Save()
 }
 
-func (w *Work) AddHorizontal(m Mediable, vert Vertical) {
-	row := w.Contents[vert.Index]
+func (w *Work) AddHorizontal(m Mediable, vert int) {
+	row := w.Contents[vert]
 
 	hor := len(row)
-	m.SetPosition(vert.Index, hor)
+	m.SetPosition(vert, hor)
 
-	w.Contents[vert.Index] = append(row, m)
+	w.Contents[vert] = append(row, m)
 	w.Save()
 }
 
 func (w *Work) MoveUp(c Contentable) {
-	row := c.GetVertical().Index
+	row := c.GetVertical()
 
 	if row == 0 {
 		return
@@ -438,7 +435,7 @@ func (w *Work) MoveUp(c Contentable) {
 }
 
 func (w *Work) MoveDown(c Contentable) {
-	row := c.GetVertical().Index
+	row := c.GetVertical()
 
 	if row >= len(w.Contents)-1 {
 		return
@@ -455,7 +452,7 @@ func (w *Work) MoveDown(c Contentable) {
 
 func (w *Work) MoveLeft(m Mediable) {
 	pos := m.GetPosition()
-	v, h := pos.Vertical.Index, pos.Horizontal.Index
+	v, h := pos.Vertical, pos.Horizontal
 
 	if h <= 0 {
 		return
@@ -469,14 +466,14 @@ func (w *Work) MoveLeft(m Mediable) {
 
 func (w *Work) MoveRight(m Mediable) {
 	pos := m.GetPosition()
-	v, h := pos.Vertical.Index, pos.Horizontal.Index
+	vert, hor := pos.Vertical, pos.Horizontal
 
-	row := w.Contents[v]
-	if h >= len(row)-1 {
+	row := w.Contents[vert]
+	if hor >= len(row)-1 {
 		return
 	}
 
-	swap(row, h, h+1, v)
+	swap(row, hor, hor+1, vert)
 	w.Save()
 }
 
@@ -511,7 +508,7 @@ func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Reques
 				text := getText(id)
 				text.Text = v[0]
 
-				work.Contents[text.GetVertical().Index][0] = text
+				work.Contents[text.GetVertical()][0] = text
 				work.Save()
 			}
 
@@ -523,7 +520,7 @@ func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Reques
 
 				media := getMedia(id)
 				media.SetCaption(&Caption{v[0]})
-				work.Contents[media.GetPosition().Vertical.Index][0] = media
+				work.Contents[media.GetPosition().Vertical][media.GetPosition().Horizontal] = media
 
 				work.Save()
 			}
@@ -551,7 +548,7 @@ func (work *Work) HandleCanvasAddCaption(w http.ResponseWriter, r *http.Request)
 	media := getMedia(id)
 	text := r.FormValue("added-caption")
 	media.SetCaption(&Caption{text})
-	work.Contents[media.GetPosition().Vertical.Index][media.GetPosition().Horizontal.Index] = media
+	work.Contents[media.GetVertical()][media.GetHorizontal()] = media
 	work.Save()
 }
 
@@ -560,7 +557,7 @@ func (work *Work) HandleCanvasAddHorizontal(w http.ResponseWriter, r *http.Reque
 
 	id := uuid.MustParse(actionValue)
 	media := getMedia(id)
-	work.AddHorizontal(MediaEmptyType.CreateNew(nil), media.GetPosition().Vertical)
+	work.AddHorizontal(MediaEmptyType.CreateNew(nil), media.GetVertical())
 	work.Save()
 }
 
@@ -628,7 +625,7 @@ func (work *Work) HandleCanvasDeleteCaption(w http.ResponseWriter, r *http.Reque
 	id := uuid.MustParse(actionValue)
 	media := getMedia(id)
 	media.SetCaption(nil)
-	work.Contents[media.GetPosition().Horizontal.Index][media.GetPosition().Vertical.Index] = media
+	work.Contents[media.GetVertical()][media.GetHorizontal()] = media
 	work.Save()
 }
 
@@ -696,6 +693,31 @@ func (t *Tag) ToHtml() template.HTML {
 	return t.filterTagToHtmlTemplate()
 }
 
+// Name of template file
+func (t *Tag) GetName(prefix string) string {
+	switch t.Name {
+	case "author":
+		return "datalist"
+	case "date":
+		return "date"
+	case "length":
+		return "length"
+	case "language":
+		return "datalist"
+	case "media":
+		return "media"
+	default:
+		panic("getHtmlTemplateString() not fully implemented")
+		// TODO
+		/* return toHtmlTemplate(tagTextTemplate, "default", nil) */
+	}
+}
+
+// Path to template file
+func (t *Tag) GetPath(fileName string) string {
+	return fmt.Sprintf("./resources/templates/tags/%s.html", fileName)
+}
+
 // TODO:
 func (t *Tag) GetPossibleValues() []string {
 	return getMockTagValues(t).PossibleValues
@@ -711,34 +733,11 @@ func (t *Tag) GetPossibleFilterModes() []string {
 	return getMockTagValues(t).PossibleFilterModes
 }
 
-// TODO:
-func (t *Tag) GetHtmlTemplateString() string {
-	switch t.Name {
-	case "author":
-		return tagDatalistTemplate
-	case "date":
-		return tagDateTemplate
-	case "length":
-		return tagLengthTemplate
-	case "language":
-		return tagDatalistTemplate
-	case "media":
-		return tagMediaTemplate
-	default:
-		panic("getHtmlTemplateString() not fully implemented")
-		// TODO
-		/* return toHtmlTemplate(tagTextTemplate, "default", nil) */
-	}
-}
-
 func (t *Tag) filterTagToHtmlTemplate() template.HTML {
-	log.Printf("tag %s to html template, possible values: %v", t.Name, t.GetPossibleValues())
-
-	tmpl := template.Must(template.New(t.Name).Parse(t.GetHtmlTemplateString()))
-
+	templ := template.Must(template.ParseFiles(t.GetPath(t.GetName(""))))
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, t); err != nil {
-		panic(fmt.Sprintf("unexpected error executing %s HTML template", t.Name))
+	if err := templ.Execute(&buf, t); err != nil {
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", t.GetName("")))
 	}
 
 	return template.HTML(buf.String())
@@ -795,7 +794,7 @@ func storeUploadedFormFile(r *http.Request, mediaPos Position) (Mediable, error)
 		}
 
 		media := mt.CreateNew([]string{mt.toSourceUrl(header.Filename)})
-		media.SetPosition(mediaPos.Vertical.Index, mediaPos.Horizontal.Index)
+		media.SetPosition(mediaPos.Vertical, mediaPos.Horizontal)
 
 		return media, nil
 	}
@@ -808,122 +807,11 @@ func handleContentUpload(r *http.Request, work *Work, mediaPos Position) error {
 		return err
 	}
 
-	work.Contents[mediaPos.Vertical.Index][mediaPos.Horizontal.Index] = media
+	work.Contents[mediaPos.Vertical][mediaPos.Horizontal] = media
 	work.Save()
 
 	return nil
 }
-
-const tagDatalistTemplate = `<datalist id="tag-values-{{ .Name }}">
-	{{ range .GetPossibleValues }}
-	<option value="{{ . }}"></option>
-	{{ end }}
-</datalist>
-
-<select name="mode-modifier">
-	{{ range .GetPossibleModeModifiers}}
-	<option value="{{ . }}"
-		{{ if eq . $.ModeModifier }}selected{{ end }}>
-		{{ . }}
-	</option>
-	{{ end }}
-</select>
-
-<input 
-	list="tag-values-{{ .Name }}" 
-	name="added-filters.value" 
-	value="{{ .Value }}"
-/>
-
-<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
-<input type="hidden" name="filter-mode" value="" />
-<!-- TODO: add remove button, search button -->`
-
-const tagDateTemplate = `
-<select name="mode-modifier">
-	{{ range .GetPossibleModeModifiers}}
-	<option value="{{ . }}"
-		{{ if eq . $.ModeModifier }}selected{{ end }}>
-		{{ . }}
-	</option>
-	{{ end }}
-</select>
-
-<select name="filter-mode">
-	{{ range .GetPossibleFilterModes }}
-	<option value="{{ . }}"
-		{{ if eq . $.FilterMode }}selected{{ end }}>
-		{{ . }}
-	</option>
-	{{ end }}
-</select>
-
-<input 
-	type="date"  
-	name="added-filters.value" 
-	value="{{ .Value }}"
-/>
-
-<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
-<!-- TODO: add remove button, search button -->`
-
-const tagLengthTemplate = `
-<select name="mode-modifier">
-	{{ range .GetPossibleModeModifiers}}
-	<option value="{{ . }}"
-		{{ if eq . $.FilterMode }}selected{{ end }}>
-		{{ . }}
-	</option>
-	{{ end }}
-</select>
-
-<select name="filter-mode">
-	{{ range .GetPossibleFilterModes }}
-	<option value="{{ . }}"
-		{{ if eq . $.FilterMode }}selected{{ end }}>
-		{{ . }}
-	</option>
-	{{ end }}
-</select>
-
-<!-- assumes .PossibleValues for a length tag is a slice of ordered values (with min and max) -->
-<datalist id="length-datalist">
-	{{ range .GetPossibleValues }}
-	<option value="{{ . }}"></option>
-	{{ end }}
-</datalist>
-
-<input 
-	type="range" 
-	list="length-datalist" 
-	name="added-filters.value" 
-	value="{{ .Value }}"	
-/>
-
-<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
-<!-- TODO: add remove button, search button -->`
-
-const tagMediaTemplate = `<select name="mode-modifier">
-	{{ range .GetPossibleModeModifiers}}
-	<option value="{{ . }}"
-		{{ if eq . $.FilterMode }}selected{{ end }}>
-		{{ . }}
-	</option>
-	{{ end }}
-</select>
-
-<select name="added-filters.value">
-	{{ range .GetPossibleValues }}
-	<option value="{{ . }}"
-		{{ if eq . $.Value }}selected{{ end }}>
-		{{ . }}
-	</option>
-	{{ end }}
-</select>
-
-<input type="hidden" name="added-filters.tag" value="{{ .Name }}" />
-<input type="hidden" name="filter-mode" value="" />
-<!-- TODO: add remove button, search button -->`
 
 // ----------------------------
 //
@@ -943,20 +831,21 @@ func (t *Text) ToHtml() template.HTML {
 	return contentableToHtmlTemplate(t, false)
 }
 
-func (t *Text) GetHtmlTemplateString() string {
-	return textTemplate
+func (t *Text) GetName(prefix string) string {
+	return prefix + "text"
 }
 
-func (t *Text) GetTemplateName() string {
-	return "text"
+func (t *Text) GetPath(fileName string) string {
+	editable := false
+	if strings.HasPrefix(fileName, "editable") {
+		editable = true
+	}
+
+	return getContentTemplatePath(t, editable)
 }
 
 func (t *Text) ToEditableHtml() template.HTML {
 	return contentableToHtmlTemplate(t, true)
-}
-
-func (t *Text) GetEditableHtmlTemplateString() string {
-	return editableTextTemplate
 }
 
 // TODO:
@@ -964,14 +853,12 @@ func (t *Text) Save() {
 	getMockDb().SaveText(t)
 }
 
-func (t *Text) GetVertical() Vertical {
+func (t *Text) GetVertical() int {
 	return t.Vertical
 }
 
 func (t *Text) SetVertical(vertical int) {
-	t.Vertical = Vertical{
-		Index: vertical,
-	}
+	t.Vertical = vertical
 }
 
 func (m *EmptyMedia) GetId() uuid.UUID {
@@ -1004,22 +891,22 @@ func (m *EmptyMedia) ToHtml() template.HTML {
 	return contentableToHtmlTemplate(m, false)
 }
 
-func (m *EmptyMedia) GetHtmlTemplateString() string {
+func (m *EmptyMedia) GetName(prefix string) string {
 	// panic("empty media is not templatable")
-	return ""
+	return prefix + "empty"
 }
 
-func (m *EmptyMedia) GetTemplateName() string {
-	// panic("empty media is not templatable")
-	return ""
+func (m *EmptyMedia) GetPath(fileName string) string {
+	editable := false
+	if strings.HasPrefix(fileName, "editable") {
+		editable = true
+	}
+
+	return getContentTemplatePath(m, editable)
 }
 
 func (m *EmptyMedia) ToEditableHtml() template.HTML {
 	return contentableToHtmlTemplate(m, true)
-}
-
-func (m *EmptyMedia) GetEditableHtmlTemplateString() string {
-	return editableMediaTemplate
 }
 
 func (m *EmptyMedia) GetCaptionHtml() template.HTML {
@@ -1035,12 +922,16 @@ func (m *EmptyMedia) Save() {
 	getMockDb().SaveEmptyMedia(m)
 }
 
-func (m *EmptyMedia) GetVertical() Vertical {
+func (m *EmptyMedia) GetVertical() int {
 	return m.Position.Vertical
 }
 
 func (m *EmptyMedia) SetVertical(vertical int) {
-	m.Position.Vertical = Vertical{Index: vertical}
+	m.Position.Vertical = vertical
+}
+
+func (m *EmptyMedia) GetHorizontal() int {
+	return m.Position.Horizontal
 }
 
 func (m *EmptyMedia) GetPosition() Position {
@@ -1048,14 +939,7 @@ func (m *EmptyMedia) GetPosition() Position {
 }
 
 func (m *EmptyMedia) SetPosition(vertical int, horizontal int) {
-	m.Position = Position{
-		Vertical: Vertical{
-			Index: vertical,
-		},
-		Horizontal: Horizontal{
-			Index: horizontal,
-		},
-	}
+	m.Position.Vertical, m.Position.Horizontal = vertical, horizontal
 }
 
 func (s *Sound) GetId() uuid.UUID {
@@ -1086,20 +970,22 @@ func (s *Sound) ToHtml() template.HTML {
 	return contentableToHtmlTemplate(s, false)
 }
 
-func (s *Sound) GetHtmlTemplateString() string {
-	return soundTemplate
+func (s *Sound) GetName(prefix string) string {
+	return prefix + "sound"
 }
 
-func (s *Sound) GetTemplateName() string {
-	return "sound"
+func (s *Sound) GetPath(fileName string) string {
+	editable := false
+	if strings.HasPrefix(fileName, "editable") {
+		editable = true
+	}
+
+	return getContentTemplatePath(s, editable)
 }
 
 func (s *Sound) ToEditableHtml() template.HTML {
+	//return contentableToHtmlTemplate(s, true)
 	return contentableToHtmlTemplate(s, true)
-}
-
-func (s *Sound) GetEditableHtmlTemplateString() string {
-	return editableSoundTemplate
 }
 
 func (s *Sound) GetCaptionHtml() template.HTML {
@@ -1115,12 +1001,16 @@ func (s *Sound) Save() {
 	getMockDb().SaveSound(s)
 }
 
-func (s *Sound) GetVertical() Vertical {
+func (s *Sound) GetVertical() int {
 	return s.Position.Vertical
 }
 
 func (s *Sound) SetVertical(vertical int) {
-	s.Position.Vertical = Vertical{Index: vertical}
+	s.Position.Vertical = vertical
+}
+
+func (s *Sound) GetHorizontal() int {
+	return s.Position.Horizontal
 }
 
 func (s *Sound) GetPosition() Position {
@@ -1128,14 +1018,7 @@ func (s *Sound) GetPosition() Position {
 }
 
 func (s *Sound) SetPosition(vertical int, horizontal int) {
-	s.Position = Position{
-		Vertical: Vertical{
-			Index: vertical,
-		},
-		Horizontal: Horizontal{
-			Index: horizontal,
-		},
-	}
+	s.Position.Vertical, s.Position.Horizontal = vertical, horizontal
 }
 
 func (v *Video) GetId() uuid.UUID {
@@ -1166,20 +1049,21 @@ func (v *Video) ToHtml() template.HTML {
 	return contentableToHtmlTemplate(v, false)
 }
 
-func (v *Video) GetHtmlTemplateString() string {
-	return videoTemplate
+func (v *Video) GetName(prefix string) string {
+	return prefix + "video"
 }
 
-func (v *Video) GetTemplateName() string {
-	return "video"
+func (v *Video) GetPath(fileName string) string {
+	editable := false
+	if strings.HasPrefix(fileName, "editable") {
+		editable = true
+	}
+
+	return getContentTemplatePath(v, editable)
 }
 
 func (v *Video) ToEditableHtml() template.HTML {
 	return contentableToHtmlTemplate(v, true)
-}
-
-func (v *Video) GetEditableHtmlTemplateString() string {
-	return editableVideoTemplate
 }
 
 func (v *Video) GetCaptionHtml() template.HTML {
@@ -1195,12 +1079,16 @@ func (v *Video) Save() {
 	getMockDb().SaveVideo(v)
 }
 
-func (v *Video) GetVertical() Vertical {
+func (v *Video) GetVertical() int {
 	return v.Position.Vertical
 }
 
 func (v *Video) SetVertical(vertical int) {
-	v.Position.Vertical = Vertical{Index: vertical}
+	v.Position.Vertical = vertical
+}
+
+func (v *Video) GetHorizontal() int {
+	return v.Position.Horizontal
 }
 
 func (v *Video) GetPosition() Position {
@@ -1208,14 +1096,7 @@ func (v *Video) GetPosition() Position {
 }
 
 func (v *Video) SetPosition(vertical int, horizontal int) {
-	v.Position = Position{
-		Vertical: Vertical{
-			Index: vertical,
-		},
-		Horizontal: Horizontal{
-			Index: horizontal,
-		},
-	}
+	v.Position.Vertical, v.Position.Horizontal = vertical, horizontal
 }
 
 func (i *Image) GetId() uuid.UUID {
@@ -1246,20 +1127,21 @@ func (i *Image) ToHtml() template.HTML {
 	return contentableToHtmlTemplate(i, false)
 }
 
-func (i *Image) GetHtmlTemplateString() string {
-	return imageTemplate
+func (i *Image) GetName(prefix string) string {
+	return prefix + "image"
 }
 
-func (i *Image) GetTemplateName() string {
-	return "image"
+func (i *Image) GetPath(fileName string) string {
+	editable := false
+	if strings.HasPrefix(fileName, "editable") {
+		editable = true
+	}
+
+	return getContentTemplatePath(i, editable)
 }
 
 func (i *Image) ToEditableHtml() template.HTML {
 	return contentableToHtmlTemplate(i, true)
-}
-
-func (i *Image) GetEditableHtmlTemplateString() string {
-	return editableImageTemplate
 }
 
 func (i *Image) GetCaptionHtml() template.HTML {
@@ -1275,12 +1157,16 @@ func (i *Image) Save() {
 	getMockDb().SaveImage(i)
 }
 
-func (i *Image) GetVertical() Vertical {
+func (i *Image) GetVertical() int {
 	return i.Position.Vertical
 }
 
 func (i *Image) SetVertical(vertical int) {
-	i.Position.Vertical = Vertical{Index: vertical}
+	i.Position.Vertical = vertical
+}
+
+func (i *Image) GetHorizontal() int {
+	return i.Position.Horizontal
 }
 
 func (i *Image) GetPosition() Position {
@@ -1288,191 +1174,57 @@ func (i *Image) GetPosition() Position {
 }
 
 func (i *Image) SetPosition(vertical int, horizontal int) {
-	i.Position = Position{
-		Vertical: Vertical{
-			Index: vertical,
-		},
-		Horizontal: Horizontal{
-			Index: horizontal,
-		},
+	i.Position.Vertical, i.Position.Horizontal = vertical, horizontal
+}
+
+func getContentTemplatePath(c Contentable, editable bool) string {
+	editablePrefix := ""
+	if editable {
+		editablePrefix = "editable/"
 	}
+
+	return fmt.Sprintf("./resources/templates/content/%s.html", c.GetName(editablePrefix))
 }
 
 func contentableToHtmlTemplate(c Contentable, editable bool) template.HTML {
-	var tmplString string
+	fileNamePrefix := ""
 	if editable {
-		tmplString = c.GetEditableHtmlTemplateString()
-	} else {
-		tmplString = c.GetHtmlTemplateString()
+		fileNamePrefix = "editable/"
 	}
 
-	tmpl := template.Must(template.New(c.GetTemplateName()).Parse(tmplString))
-
+	templ := template.Must(template.ParseFiles(c.GetPath(fileNamePrefix)))
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, c); err != nil {
-		panic(fmt.Sprintf("unexpected error executing %s HTML template", c.GetTemplateName()))
+	if err := templ.Execute(&buf, c); err != nil {
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", c.GetName("")))
 	}
 
 	return template.HTML(buf.String())
 }
 
 func mediaToCaptionHtml(m Mediable, editable bool) template.HTML {
-	var tmplString string
+	fileName := "caption"
 	if editable {
-		tmplString = editableCaptionTemplate
-	} else {
-		tmplString = captionTemplate
+		fileName = "editable/" + fileName
 	}
 
-	tmpl := template.Must(template.New(m.GetTemplateName()).Parse(tmplString))
+	path := fmt.Sprintf("./resources/templates/content/%s.html", fileName)
 
 	type MediableCaption struct {
 		Media   Mediable
 		Caption *Caption
 	}
 
+	templ := template.Must(template.ParseFiles(path))
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, &MediableCaption{
+	if err := templ.Execute(&buf, &MediableCaption{
 		Media:   m,
 		Caption: m.GetCaption(),
 	}); err != nil {
-		panic(fmt.Sprintf("unexpected error executing %s HTML template", m.GetTemplateName()))
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", m.GetName("")))
 	}
 
 	return template.HTML(buf.String())
 }
-
-const horizontalTemplate = `{{ .Media.ToHtml }}`
-
-// MediableCaption is passed in
-const captionTemplate = `{{ with .Media.GetCaption }}
-<figcaption>
-	{{ .Text }}
-</figcaption>
-{{ end }}`
-
-const textTemplate = `<p>{{ .Text }}</p>`
-
-const soundTemplate = `<figure>
-	<audio controls>
-		{{ range .GetSources }}
-		<source src={{ . }}>
-		{{ end }}
-		Your browser doesn't support this audio.
-	</audio>
-	
-	{{ .GetCaptionHtml }}
-</figure>`
-
-const videoTemplate = `<figure>
-	<video controls>
-		{{ range .GetSources }}
-		<source src={{ . }}>
-		{{ end }}
-		Your browser doesn't support this video.
-	</video>
-	
-	{{ .GetCaptionHtml }}
-</figure>`
-
-const imageTemplate = `<figure>
-	<img src={{ index .GetSources 0 }} alt="Image">
-
-	{{ .GetCaptionHtml }}
-</figure>`
-
-const editableHorizontalTemplate = `<fieldset>
-	<legend>
-		<button type="submit" name="action" value="horizontal-left:{{ .ParentMedia.GetId }}">
-			TODO: Left
-		</button>
-
-		<button type="submit" name="action" value="horizontal-right:{{ .ParentMedia.GetId }}">
-			TODO: Right
-		</button>
-
-		<button type="submit" name="action" value="delete-horizontal:{{ .Index }}">
-			✕
-		</button>
-	</legend>
-
-	{{ .Media.ToEditableHtml }}
-</fieldset>
-`
-
-// MediableCaption is passed in
-const editableCaptionTemplate = `{{ if .Caption }}
-<fieldset>
-	<legend>
-		<button type="submit" name="action" value="delete-caption:{{ .Media.GetId }}">
-			✕
-		</button>
-	</legend>
-
-	<textarea name="caption[{{ .Media.GetId }}]">
-		{{ .Caption.Text }}
-	</textarea>
-</fieldset>
-{{ else }}
-<br>
-<button type="submit" name="action" value="add-caption:{{ .Media.GetId }}">
-	&
-</button>
-
-with caption
-<br>
-{{ end }}
- 
-{{ if eq .Media.GetPosition.Horizontal.Index 0 }}
-<button type="submit" name="action" value="add-horizontal:{{ .Media.GetId }}">
-	&
-</button>
-
-with horizontal
-{{ end }}
-`
-
-const editableTextTemplate = `<textarea name=text[{{ .GetId }}]>{{ .Text }}</textarea>`
-
-const editableMediaTemplate = `<fieldset>
-	<legend>	
-		<button type="submit" name="action" value="upload:{{ .GetId }}">
-			Upload
-		</button>
-
-		sound, video or image
-	</legend>
-
-	<input type="file" name="upload" />
-</fieldset>`
-
-const editableSoundTemplate = `<figure>
-	<audio controls>
-		{{ range .GetSources }}
-		<source src={{ . }}>
-		{{ end }}
-		Your browser doesn't support this audio.
-	</audio>
-
-	{{ .GetEditableCaptionHtml }}
-</figure>`
-
-const editableVideoTemplate = `<figure>
-	<video controls>
-		{{ range .GetSources }}
-		<source src={{ . }}>
-		{{ end }}
-		Your browser doesn't support this video.
-	</video>
-
-	{{ .GetEditableCaptionHtml }}
-</figure>`
-
-const editableImageTemplate = `<figure>
-	<img src={{ index .GetSources 0 }} alt="Image">
-	
-	{{ .GetEditableCaptionHtml }}
-</figure>`
 
 // --------------------------------------
 //
