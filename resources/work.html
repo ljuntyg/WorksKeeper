@@ -4,10 +4,11 @@
     <h1>{{ .GetTitle }}</h1>
 
     {{ range .Contents }}
-
-      <!-- TODO: pass in ContentTypes through HtmlEnvironment -->
-      {{ .ToHtml }}
-
+      <section>
+      {{ range . }}
+        {{ .ToHtml }}
+      {{ end }}
+      </section>
     {{ end }}
 
   </body>

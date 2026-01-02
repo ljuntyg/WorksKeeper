@@ -20,9 +20,13 @@
       <form method="post">
         <fieldset>
           <legend>
+            {{ if $.Data.Filter.FilterGroups }}
             <button type="submit" name="action" value="search:">
               Search
             </button>
+            {{ else }}
+            Search
+            {{ end }}
 
             works
 
@@ -67,11 +71,11 @@
                 
                 {{ range .Tags  }}
                 <li>
-                  {{ .ToHtml }}
-                  
                   <button type="submit" name="action" value="remove-filter:{{ $globalIdx }}">
                     ✕
                   </button>
+
+                  {{ .ToHtml }}
                 </li>
 
                 {{ $globalIdx = add $globalIdx 1 }}

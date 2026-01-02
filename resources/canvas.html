@@ -10,59 +10,92 @@
           {{ .GetTitle }}
         </textarea>
       </h1>
-  
-      <section>
-        {{ range .Contents }}
-        <fieldset>
-          <legend>
-            <button type="submit" name="action" value="move-up:{{ .GetId }}">
-              ↑
-            </button>
 
-            <button type="submit" name="action" value="move-down:{{ .GetId }}">
-              ↓
-            </button>
-            
-            <button type="submit" name="action" value="delete-content:{{ .GetId }}">
-              ✕
-            </button>
-          </legend>
-          
-          {{ .ToEditableHtml }}
-        </fieldset>
+      {{ $nbrRows := len .Contents }}
+      {{ range .Contents }}
+      {{ $first := index . 0 }}
+      <fieldset>
+        <legend>
+          <button type="submit" name="action" value="delete-content:{{ $first.GetId }}">
+            ✕
+          </button>
+
+          {{ if ne ($first.GetVertical.Index) 0 }}
+          <button type="submit" name="action" value="move-up:{{ $first.GetId }}">
+            ↑
+          </button>
+          {{ end }}
+
+          {{ if ne (add $first.GetVertical.Index 1) $nbrRows }}
+          <button type="submit" name="action" value="move-down:{{ $first.GetId }}">
+            ↓
+          </button>
+          {{ end }}
+        </legend>
+
+        {{ $rowLen := len . }}
+        {{ if eq $rowLen 1 }}
+          {{ range . }}
+            {{ .ToEditableHtml }}
+          {{ end }}
+        {{ else }}
+          {{ range . }}
+          <fieldset>
+            <legend>
+              <button type="submit" name="action" value="delete-horizontal:{{ .GetId }}">
+                ✕
+              </button>
+
+              {{ if ne .GetPosition.Horizontal.Index 0 }}
+              <button type="submit" name="action" value="horizontal-left:{{ .GetId }}">
+                ←
+              </button>
+              {{ end }}
+
+              {{ if ne (add .GetPosition.Horizontal.Index 1) $rowLen }}
+              <button type="submit" name="action" value="horizontal-right:{{ .GetId }}">
+                →
+              </button>
+              {{ end }}
+            </legend>
+
+            {{ .ToEditableHtml }}
+          </fieldset>
+          {{ end }}
         {{ end }}
-      </section>
+      </fieldset>
+      {{ end }}
   
       <aside>
         <fieldset>
           <legend>
-            Compose work
+            <button type="submit" name="action" value="save:">
+            Save
+          </button>
+
+            work
           </legend>
 
           <button type="submit" name="action" value="add-text:{{ .GetId }}">
             &
           </button>
 
-          with text<br>
-
+          with text
+          
+          <br>
           <button type="submit" name="action" value="add-media:{{ .GetId }}">
             &
           </button>
 
           with sound, video or image
 
-          <!-- <fieldset>
-            <legend>
-              with sound, video or image
+          <br>
+          or
+          <button type="submit" name="action" value="view:">
+            view
+          </button>
 
-              <button type="submit" name="action" value="upload:{{ .GetId }}">
-                upload
-              </button>
-            </legend>
-            
-            <input type="file" name="upload" />
-          </fieldset> -->
-
+          work
         </fieldset>
       </aside>
     </form>

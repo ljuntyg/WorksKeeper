@@ -152,8 +152,10 @@ func initMockTagValues() []*TagValues {
 func (db *WorksKeeperDB) SaveWork(w *Work) {
 	db.Listings[w.GetNumbering()] = w
 
-	for _, c := range w.Contents {
-		c.Save()
+	for _, row := range w.Contents {
+		for _, c := range row {
+			c.Save()
+		}
 	}
 }
 
@@ -342,46 +344,45 @@ func getMockDb() *WorksKeeperDB {
 	return mockDb
 }
 
-func getMockText(idx int) *Text {
+func getMockText(pos Position) *Text {
 	log.Println("calling MOCK GetMockText()")
 
 	return &Text{
-		Text:  "Mock text!",
-		Id:    uuid.New(),
-		Index: idx,
+		Text: "Mock text!",
+		Id:   uuid.New(),
 	}
 }
 
-func getMockSound(idx int) *Sound {
+func getMockSound(pos Position) *Sound {
 	log.Println("calling MOCK GetMockSound()")
 
 	return &Sound{
-		Sources: []string{getBaseUrl() + MediaSoundType.urlPrefix() + "609562_migfus20_background-music.ogg"},
-		Caption: getMockCaption(),
-		Id:      uuid.New(),
-		Index:   idx,
+		Sources:  []string{getBaseUrl() + MediaSoundType.urlPrefix() + "609562_migfus20_background-music.ogg"},
+		Caption:  getMockCaption(),
+		Id:       uuid.New(),
+		Position: pos,
 	}
 }
 
-func getMockVideo(idx int) *Video {
+func getMockVideo(pos Position) *Video {
 	log.Println("calling MOCK GetMockVideo()")
 
 	return &Video{
-		Sources: []string{getBaseUrl() + MediaVideoType.urlPrefix() + "14044733_1080_1920_48fps(2).mp4"},
-		Caption: getMockCaption(),
-		Id:      uuid.New(),
-		Index:   idx,
+		Sources:  []string{getBaseUrl() + MediaVideoType.urlPrefix() + "14044733_1080_1920_48fps(2).mp4"},
+		Caption:  getMockCaption(),
+		Id:       uuid.New(),
+		Position: pos,
 	}
 }
 
-func getMockImage(idx int) *Image {
+func getMockImage(pos Position) *Image {
 	log.Println("calling MOCK GetMockImage()")
 
 	return &Image{
-		Sources: []string{getBaseUrl() + MediaImageType.urlPrefix() + "IMG20250819173509~2.jpg"},
-		Caption: getMockCaption(),
-		Id:      uuid.New(),
-		Index:   idx,
+		Sources:  []string{getBaseUrl() + MediaImageType.urlPrefix() + "IMG20250819173509~2.jpg"},
+		Caption:  getMockCaption(),
+		Id:       uuid.New(),
+		Position: pos,
 	}
 }
 
@@ -390,41 +391,51 @@ func getMockCaption() *Caption {
 	return &Caption{"Test caption"}
 }
 
-func (mt MediaType) GetMock(idx int) Contentable {
+func (mt MediaType) GetMock(pos Position) Contentable {
 	switch mt {
 	case MediaSoundType:
-		return getMockSound(idx)
+		return getMockSound(pos)
 	case MediaVideoType:
-		return getMockVideo(idx)
+		return getMockVideo(pos)
 	case MediaImageType:
-		return getMockImage(idx)
+		return getMockImage(pos)
 	default:
 		panic("unexpected ContentType when getting mock")
 	}
 }
 
-func (ct ContentType) GetMock(idx int) Contentable {
+func (ct ContentType) GetMock(pos Position) Contentable {
 	switch ct {
 	case ContentTextType:
-		return getMockText(idx)
+		return getMockText(pos)
 	default:
 		panic("unexpected ContentType when getting mock")
 	}
 }
 
-func getMockContents() []Contentable {
+func getMockContents() [][]Contentable {
 	n := maxWorkContents
 
-	contents := make([]Contentable, n)
+	contents := make([][]Contentable, n)
 
 	for i := range n {
+		contents[i] = make([]Contentable, 1)
+
 		pickMedia := rng.Intn(2)
 		if pickMedia == 1 {
 			t := AllMediaTypes[rng.Intn(len(AllMediaTypes))]
-			contents[i] = t.GetMock(i)
+			contents[i][0] = t.GetMock(Position{
+				Vertical: Vertical{
+					Index: i,
+				},
+			})
 		} else {
 			t := AllContentTypes[rng.Intn(len(AllContentTypes))]
-			contents[i] = t.GetMock(i)
+			contents[i][0] = t.GetMock(Position{
+				Vertical: Vertical{
+					Index: i,
+				},
+			})
 		}
 	}
 
@@ -453,7 +464,7 @@ func getMockEmptyWork() *Work {
 	return &Work{
 		Title:     "Untitled",
 		Length:    0,
-		Contents:  []Contentable{},
+		Contents:  [][]Contentable{},
 		Id:        uuid.New(),
 		Numbering: getMockNumbering(&currentWork, "work"),
 	}
