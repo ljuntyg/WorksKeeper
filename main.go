@@ -1522,44 +1522,93 @@ func getSeriesFromRequest(r *http.Request) *Series {
 	return getSeries(numbering)
 }
 
-// TODO: for each Numberable?
-// TODO: variable number of random? fixed to 3 now, or break out into a struct/interface with an attribute
+func (n Numbering) numberingToUrlString() string {
+	lenRand := len(strconv.Itoa(n.Random))
+	randString := fmt.Sprintf("%d%d", lenRand, n.Random)
+
+	lenSerial := len(strconv.Itoa(n.Serial))
+	serialString := fmt.Sprintf("%d%d", lenSerial, n.Serial)
+
+	centuryString := strconv.Itoa(n.Century)
+	lenCentury := len(centuryString)
+	centuryString = fmt.Sprintf("%d%s", lenCentury, centuryString)
+
+	yearString := strconv.Itoa(n.Year)
+	lenYear := len(yearString)
+	yearString = fmt.Sprintf("%d%s", lenCentury, yearString)
+
+	dayString := strconv.Itoa(n.Day)
+	lenDay := len(dayString)
+	dayString = fmt.Sprintf("%d%s", lenDay, dayString)
+
+	if lenRand > 4 || lenSerial > 6 || lenCentury > 3 || lenYear > 3 || lenDay > 3 {
+		panic("invalid numbering provided when creating url")
+	}
+
+	return fmt.Sprintf("/%s/%s%s%s%s%s",
+		n.Type,
+		randString,
+		serialString,
+		centuryString,
+		yearString,
+		dayString)
+}
+
+func isDigitsOnly(s string) bool {
+	if s == "" {
+		return false
+	}
+
+	for _, i := range s {
+		if i < '0' || i > '9' {
+			return false
+		}
+	}
+
+	return true
+}
+
 func urlStringToNumbering(s string, typeString string) (Numbering, error) {
-	// XX /11222/of/21st/century/25th/year/362nd/day, work
-	// /11222/21/25/362, work
-	parts := strings.Split(s, "/")
-	if len(parts) != 4 {
+	// lenRand[1-4]|Random|lenSerial[1-6]|Serial|lenCentury[1-3]|Century|lenYear[1-3]|Year|lenDay[1-3]|Day, Type
+	if !isDigitsOnly(s) {
 		return Numbering{}, fmt.Errorf("invalid format: %q", s)
 	}
 
-	serialAndRandom := parts[0]
-	random, err1 := strconv.Atoi(serialAndRandom[:3])
-	serial, err := strconv.Atoi(serialAndRandom[3:])
-	if err != nil || err1 != nil {
-		return Numbering{}, err
+	n := 5
+	log.Println("GOT s to handle: " + s)
+	vals := make([]int, n)
+	pos := 0
+	for i := range n {
+		if pos+1 > len(s) {
+			log.Printf("out of bounds with pos %d", pos)
+			return Numbering{}, errors.New("unexpected end of string")
+		}
+
+		lenI := int(s[pos] - '0')
+		pos++
+
+		if pos+lenI > len(s) {
+			log.Printf("out of bounds with pos %d, lenI %d", pos, lenI)
+			return Numbering{}, errors.New("unexpected end of string")
+		}
+
+		val, err := strconv.Atoi(s[pos : pos+lenI])
+		if err != nil {
+			return Numbering{}, err
+		}
+
+		pos += lenI
+		vals[i] = val
 	}
 
-	century, err := strconv.Atoi(strings.TrimRight(parts[1], "stndrh"))
-	if err != nil {
-		return Numbering{}, err
-	}
-
-	year, err := strconv.Atoi(strings.TrimRight(parts[2], "stndrh"))
-	if err != nil {
-		return Numbering{}, err
-	}
-
-	day, err := strconv.Atoi(strings.TrimRight(parts[3], "stndrh"))
-	if err != nil {
-		return Numbering{}, err
-	}
+	log.Printf("incoming string was: %s, resulting vals are: %v", s, vals)
 
 	return Numbering{
-		Century: century,
-		Year:    year,
-		Day:     day,
-		Serial:  serial,
-		Random:  random,
+		Random:  vals[0],
+		Serial:  vals[1],
+		Century: vals[2],
+		Year:    vals[3],
+		Day:     vals[4],
 		Type:    typeString,
 	}, nil
 }
@@ -1650,27 +1699,6 @@ func mustCombineNumbers(numbers []int) int {
 	}
 
 	return combined
-}
-
-func (n Numbering) numberingToUrlString() string {
-	/* centuryString := fmt.Sprintf("%d%s", f.Numbering.Century, getEnglishNumberSuffix(f.Numbering.Century))
-	yearString := fmt.Sprintf("%d%s", f.Numbering.Year, getEnglishNumberSuffix(f.Numbering.Year))
-	dayString := fmt.Sprintf("%d%s", f.Numbering.Day, getEnglishNumberSuffix(f.Numbering.Day)) */
-
-	// return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", f.Numbering.Type, f.Numbering.Random, f.Numbering.Serial, centuryString, yearString, dayString)
-
-	// 64 bits (8 B):
-	// Random1[4] Random2[4] Random3[4] Serial[12] Century[6] Year[7] Day[9]
-
-	var numBuf int64
-	var buf bytes.Bu
-	numBuf = 10000
-
-	centuryString := strconv.Itoa(n.Century)
-	yearString := strconv.Itoa(n.Year)
-	dayString := strconv.Itoa(n.Day)
-
-	return fmt.Sprintf("/%s/%d%d/%s/%s/%s", n.Type, n.Random, n.Serial, centuryString, yearString, dayString)
 }
 
 // ----------------------------
