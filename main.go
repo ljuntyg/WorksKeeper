@@ -77,8 +77,6 @@ type Matrixable interface {
 }
 
 type HandlerCanvasable interface {
-	HandleCanvasSaveCanvas(w http.ResponseWriter, r *http.Request)
-	HandleCanvasViewWork(w http.ResponseWriter, r *http.Request)
 	HandleCanvasExistingData(w http.ResponseWriter, r *http.Request)
 	HandleCanvasAddText(w http.ResponseWriter, r *http.Request)
 	HandleCanvasAddMedia(w http.ResponseWriter, r *http.Request)
@@ -480,18 +478,6 @@ func (w *Work) MoveRight(c Contentable) {
 
 	swap(row, hor, hor+1, vert)
 	w.Save()
-}
-
-// TODO: unneccessary?
-func (work *Work) HandleCanvasSaveCanvas(w http.ResponseWriter, r *http.Request) {
-	work.HandleCanvasExistingData(w, r)
-}
-
-func (work *Work) HandleCanvasViewWork(w http.ResponseWriter, r *http.Request) {
-	// TODO: unneccessary?l
-	work.HandleCanvasExistingData(w, r)
-
-	http.Redirect(w, r, work.GetNumberingUrlString(), http.StatusSeeOther)
 }
 
 func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Request) {
@@ -1809,7 +1795,7 @@ func searchWorksPostHandler(w http.ResponseWriter, r *http.Request) {
 		filter.HandleSearchRemoveFilter(w, r)
 	}
 
-	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+	searchWorksGetHandler(w, r)
 }
 
 func viewWorkHandler(w http.ResponseWriter, r *http.Request) {
@@ -1851,10 +1837,6 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 	work.HandleCanvasExistingData(w, r)
 
 	switch action {
-	case "save":
-		work.HandleCanvasSaveCanvas(w, r)
-	case "view":
-		work.HandleCanvasViewWork(w, r)
 	case "add-text":
 		work.HandleCanvasAddText(w, r)
 	case "add-media":
@@ -1883,7 +1865,7 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 		work.HandleCanvasDeleteHorizontal(w, r)
 	}
 
-	http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+	createWorkGetHandler(w, r)
 }
 
 func createWorkGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -1914,13 +1896,13 @@ func main() {
 	mux.HandleFunc("/works", viewWorksHandler)
 
 	mux.HandleFunc("/search/works", searchWorksNewFilterHandler)
-	mux.HandleFunc("/search/works/with/filter/{numbering...}", searchWorksHandler)
+	mux.HandleFunc("/search/works/with/filter/{numbering}", searchWorksHandler)
 
-	mux.HandleFunc("/work/{numbering...}", viewWorkHandler)
-	mux.HandleFunc("/series/{numbering...}", viewSeriesHandler)
+	mux.HandleFunc("/work/{numbering}", viewWorkHandler)
+	mux.HandleFunc("/series/{numbering}", viewSeriesHandler)
 
 	mux.HandleFunc("/compose/work", createNewWorkHandler)
-	mux.HandleFunc("/compose/work/{numbering...}", createWorkHandler)
+	mux.HandleFunc("/compose/work/{numbering}", createWorkHandler)
 
 	mux.HandleFunc("/organize/works/by/{name}", organizeWorksHandler)
 	log.Fatal(http.ListenAndServe(":8080", subdomainPeriodReplacer(mux)))

@@ -104,12 +104,41 @@
             </li>
           </menu>
 
-          <button type="submit" name="action" value="view:">
-            View work
-          </button>
+          <a href="{{ .GetNumberingUrlString }}">View work</a>
 
         </fieldset>
       </aside>
     </form>
+
+    <script>
+      document.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        
+        const submitter = e.submitter;
+        if (submitter && submitter.name) {
+          formData.append(submitter.name, submitter.value);
+        }
+        
+        try {
+          const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (response.ok) {
+            const html = await response.text();
+            document.open();
+            document.write(html);
+            document.close();
+          } else {
+            console.error('Form submission failed:', response.status);
+          }
+        } catch (error) {
+          console.error('Error submitting form:', error);
+        }
+      });
+    </script>
   </body>
 </html>
