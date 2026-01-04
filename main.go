@@ -66,9 +66,10 @@ type Series struct {
 }
 
 type Matrixable interface {
-	RemoveContent(c Contentable)
 	AddContent(c Contentable)
 	AddHorizontal(c Contentable, vert int)
+	RemoveContent(c Contentable)
+	RemoveRow(vert int)
 	MoveUp(c Contentable)
 	MoveDown(c Contentable)
 	MoveLeft(c Contentable)
@@ -89,6 +90,7 @@ type HandlerCanvasable interface {
 	HandleCanvasHorizontalLeft(w http.ResponseWriter, r *http.Request)
 	HandleCanvasMediaUpload(w http.ResponseWriter, r *http.Request)
 	HandleCanvasDeleteContent(w http.ResponseWriter, r *http.Request)
+	HandleCanvasDeleteRow(w http.ResponseWriter, r *http.Request)
 	HandleCanvasDeleteCaption(w http.ResponseWriter, r *http.Request)
 	HandleCanvasDeleteHorizontal(w http.ResponseWriter, r *http.Request)
 }
@@ -363,22 +365,9 @@ func (w *Work) Save() {
 }
 
 func (w *Work) RemoveContent(c Contentable) {
+	// Remove whole row if the only element on the row is removed
 	if c.GetHorizontal() == 0 && len(w.Contents[c.GetVertical()]) == 1 {
-		// Remove whole row if the only element on this row is removed
-		vert := c.GetVertical()
-
-		w.Contents = append(
-			w.Contents[:vert],
-			w.Contents[vert+1:]...,
-		)
-
-		for v := vert; v < len(w.Contents); v++ {
-			for _, c := range w.Contents[v] {
-				c.SetVertical(v)
-			}
-		}
-
-		w.Save()
+		w.RemoveRow(c.GetVertical())
 	} else {
 		pos := c.GetPosition()
 		vert := pos.Vertical
@@ -394,6 +383,21 @@ func (w *Work) RemoveContent(c Contentable) {
 		w.Contents[vert] = row
 		w.Save()
 	}
+}
+
+func (w *Work) RemoveRow(vert int) {
+	w.Contents = append(
+		w.Contents[:vert],
+		w.Contents[vert+1:]...,
+	)
+
+	for v := vert; v < len(w.Contents); v++ {
+		for _, c := range w.Contents[v] {
+			c.SetVertical(v)
+		}
+	}
+
+	w.Save()
 }
 
 func (w *Work) AddContent(c Contentable) {
@@ -623,6 +627,17 @@ func (work *Work) HandleCanvasDeleteContent(w http.ResponseWriter, r *http.Reque
 	id := uuid.MustParse(actionValue)
 	content := getContent(id)
 	work.RemoveContent(content)
+}
+
+func (work *Work) HandleCanvasDeleteRow(w http.ResponseWriter, r *http.Request) {
+	_, actionValue := extractActionAndValueFromRequest(r)
+
+	vert, err := strconv.Atoi(actionValue)
+	if err != nil {
+		panic("unexpecte error parsing row to remove")
+	}
+
+	work.RemoveRow(vert)
 }
 
 func (work *Work) HandleCanvasDeleteCaption(w http.ResponseWriter, r *http.Request) {
@@ -1789,6 +1804,8 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 		work.HandleCanvasMediaUpload(w, r)
 	case "delete-content":
 		work.HandleCanvasDeleteContent(w, r)
+	case "delete-row":
+		work.HandleCanvasDeleteRow(w, r)
 	case "delete-caption":
 		work.HandleCanvasDeleteCaption(w, r)
 	case "delete-horizontal":
