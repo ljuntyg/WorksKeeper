@@ -1,11 +1,13 @@
 <fieldset>
 	<legend>	
-		<button type="submit" name="action" value="upload:{{ .GetId }}">
-			Upload
-		</button>
-
-		sound, video or image
+		<input type="file" name="upload" />
 	</legend>
 
-	<input type="file" name="upload" />
+	<menu>
+		<li>
+			<button type="submit" name="action" value="upload:{{ .GetId }}">
+				& upload
+			</button>
+		</li>
+	</menu>
 </fieldset>

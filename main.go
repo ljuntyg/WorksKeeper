@@ -66,14 +66,14 @@ type Series struct {
 }
 
 type Matrixable interface {
-	RemoveContent(c Contentable)
-	RemoveMedia(m Mediable)
 	AddContent(c Contentable)
-	AddHorizontal(m Mediable, vert int)
+	AddHorizontal(c Contentable, vert int)
+	RemoveContent(c Contentable)
+	RemoveRow(vert int)
 	MoveUp(c Contentable)
 	MoveDown(c Contentable)
-	MoveLeft(m Mediable)
-	MoveRight(m Mediable)
+	MoveLeft(c Contentable)
+	MoveRight(c Contentable)
 }
 
 type HandlerCanvasable interface {
@@ -90,6 +90,7 @@ type HandlerCanvasable interface {
 	HandleCanvasHorizontalLeft(w http.ResponseWriter, r *http.Request)
 	HandleCanvasMediaUpload(w http.ResponseWriter, r *http.Request)
 	HandleCanvasDeleteContent(w http.ResponseWriter, r *http.Request)
+	HandleCanvasDeleteRow(w http.ResponseWriter, r *http.Request)
 	HandleCanvasDeleteCaption(w http.ResponseWriter, r *http.Request)
 	HandleCanvasDeleteHorizontal(w http.ResponseWriter, r *http.Request)
 }
@@ -159,20 +160,32 @@ type Verticable interface {
 	SetVertical(vertical int)
 }
 
+type Positionable interface {
+	Verticable
+	GetHorizontal() int
+	GetPosition() Position
+	SetPosition(vertical int, horizontal int)
+}
+
 type Contentable interface {
 	Templatable
 	Editable
-	Verticable
+	Positionable
 	Saveable
 	GetId() uuid.UUID
 	GetWork() *Work
+}
+
+type Position struct {
+	Vertical   int
+	Horizontal int
 }
 
 type Text struct {
 	Id       uuid.UUID
 	Work     *Work
 	Text     string
-	Vertical int
+	Position Position
 }
 
 type Caption struct {
@@ -182,28 +195,15 @@ type Caption struct {
 type Captionable interface {
 	GetCaptionHtml() template.HTML
 	GetEditableCaptionHtml() template.HTML
-}
-
-type Position struct {
-	Vertical   int
-	Horizontal int
-}
-
-type Positionable interface {
-	Verticable
-	GetHorizontal() int
-	GetPosition() Position
-	SetPosition(vertical int, horizontal int)
+	GetCaption() *Caption
+	SetCaption(caption *Caption)
 }
 
 type Mediable interface {
 	Contentable
 	Captionable
-	Positionable
 	GetSources() []string
-	GetCaption() *Caption
 	SetSources(sources []string)
-	SetCaption(caption *Caption)
 }
 
 type EmptyMedia struct {
@@ -368,11 +368,28 @@ func (w *Work) Save() {
 	getMockDb().SaveWork(w)
 }
 
-// Assume we want no nil gaps in the matrix
-// TODO: must reorder every time?
 func (w *Work) RemoveContent(c Contentable) {
-	vert := c.GetVertical()
+	// Remove whole row if the only element on the row is removed
+	if c.GetHorizontal() == 0 && len(w.Contents[c.GetVertical()]) == 1 {
+		w.RemoveRow(c.GetVertical())
+	} else {
+		pos := c.GetPosition()
+		vert := pos.Vertical
+		hor := pos.Horizontal
+		row := w.Contents[vert]
 
+		row = append(row[:hor], row[hor+1:]...)
+
+		for i := hor; i < len(row); i++ {
+			row[i].SetPosition(vert, i)
+		}
+
+		w.Contents[vert] = row
+		w.Save()
+	}
+}
+
+func (w *Work) RemoveRow(vert int) {
 	w.Contents = append(
 		w.Contents[:vert],
 		w.Contents[vert+1:]...,
@@ -387,22 +404,6 @@ func (w *Work) RemoveContent(c Contentable) {
 	w.Save()
 }
 
-func (w *Work) RemoveMedia(m Mediable) {
-	pos := m.GetPosition()
-	vert := pos.Vertical
-	hor := pos.Horizontal
-	row := w.Contents[vert]
-
-	row = append(row[:hor], row[hor+1:]...)
-
-	for i := hor; i < len(row); i++ {
-		row[i].(Mediable).SetPosition(vert, i)
-	}
-
-	w.Contents[vert] = row
-	w.Save()
-}
-
 func (w *Work) AddContent(c Contentable) {
 	vert := len(w.Contents)
 
@@ -412,13 +413,13 @@ func (w *Work) AddContent(c Contentable) {
 	w.Save()
 }
 
-func (w *Work) AddHorizontal(m Mediable, vert int) {
+func (w *Work) AddHorizontal(c Contentable, vert int) {
 	row := w.Contents[vert]
 
 	hor := len(row)
-	m.SetPosition(vert, hor)
+	c.SetPosition(vert, hor)
 
-	w.Contents[vert] = append(row, m)
+	w.Contents[vert] = append(row, c)
 	w.Save()
 }
 
@@ -454,8 +455,8 @@ func (w *Work) MoveDown(c Contentable) {
 	w.Save()
 }
 
-func (w *Work) MoveLeft(m Mediable) {
-	pos := m.GetPosition()
+func (w *Work) MoveLeft(c Contentable) {
+	pos := c.GetPosition()
 	v, h := pos.Vertical, pos.Horizontal
 
 	if h <= 0 {
@@ -468,8 +469,8 @@ func (w *Work) MoveLeft(m Mediable) {
 	w.Save()
 }
 
-func (w *Work) MoveRight(m Mediable) {
-	pos := m.GetPosition()
+func (w *Work) MoveRight(c Contentable) {
+	pos := c.GetPosition()
 	vert, hor := pos.Vertical, pos.Horizontal
 
 	row := w.Contents[vert]
@@ -512,7 +513,7 @@ func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Reques
 				text := getText(id)
 				text.Text = v[0]
 
-				work.Contents[text.GetVertical()][0] = text
+				work.Contents[text.GetVertical()][text.GetHorizontal()] = text
 				work.Save()
 			}
 
@@ -560,8 +561,17 @@ func (work *Work) HandleCanvasAddHorizontal(w http.ResponseWriter, r *http.Reque
 	_, actionValue := extractActionAndValueFromRequest(r)
 
 	id := uuid.MustParse(actionValue)
-	media := getMedia(id)
-	work.AddHorizontal(MediaEmptyType.CreateNew(nil), media.GetVertical())
+	content := getContent(id)
+	var newContent Contentable
+
+	switch content.(type) {
+	case Mediable:
+		newContent = MediaEmptyType.CreateNew(nil)
+	case Contentable:
+		newContent = ContentTextType.CreateNew()
+	}
+
+	work.AddHorizontal(newContent, content.GetVertical())
 	work.Save()
 }
 
@@ -585,16 +595,16 @@ func (work *Work) HandleCanvasHorizontalRight(w http.ResponseWriter, r *http.Req
 	_, actionValue := extractActionAndValueFromRequest(r)
 
 	id := uuid.MustParse(actionValue)
-	media := getMedia(id)
-	work.MoveRight(media)
+	content := getContent(id)
+	work.MoveRight(content)
 }
 
 func (work *Work) HandleCanvasHorizontalLeft(w http.ResponseWriter, r *http.Request) {
 	_, actionValue := extractActionAndValueFromRequest(r)
 
 	id := uuid.MustParse(actionValue)
-	media := getMedia(id)
-	work.MoveLeft(media)
+	content := getContent(id)
+	work.MoveLeft(content)
 }
 
 func (work *Work) HandleCanvasMediaUpload(w http.ResponseWriter, r *http.Request) {
@@ -623,6 +633,17 @@ func (work *Work) HandleCanvasDeleteContent(w http.ResponseWriter, r *http.Reque
 	work.RemoveContent(content)
 }
 
+func (work *Work) HandleCanvasDeleteRow(w http.ResponseWriter, r *http.Request) {
+	_, actionValue := extractActionAndValueFromRequest(r)
+
+	vert, err := strconv.Atoi(actionValue)
+	if err != nil {
+		panic("unexpecte error parsing row to remove")
+	}
+
+	work.RemoveRow(vert)
+}
+
 func (work *Work) HandleCanvasDeleteCaption(w http.ResponseWriter, r *http.Request) {
 	_, actionValue := extractActionAndValueFromRequest(r)
 
@@ -637,8 +658,20 @@ func (work *Work) HandleCanvasDeleteHorizontal(w http.ResponseWriter, r *http.Re
 	_, actionValue := extractActionAndValueFromRequest(r)
 
 	id := uuid.MustParse(actionValue)
-	media := getMedia(id)
-	work.RemoveMedia(media)
+	content := getContent(id)
+	work.RemoveContent(content)
+}
+
+func (w *Work) reindexRow(vert int) {
+	for _, c := range w.Contents[vert] {
+		c.SetVertical(vert)
+	}
+}
+
+func swap(row []Contentable, i, j, v int) {
+	row[i], row[j] = row[j], row[i]
+	row[i].SetPosition(v, i)
+	row[j].SetPosition(v, j)
 }
 
 // ----------------------------------------
@@ -749,18 +782,6 @@ func (t *Tag) filterTagToHtmlTemplate() template.HTML {
 	return template.HTML(buf.String())
 }
 
-func (w *Work) reindexRow(vert int) {
-	for _, c := range w.Contents[vert] {
-		c.SetVertical(vert)
-	}
-}
-
-func swap(row []Contentable, i, j, v int) {
-	row[i], row[j] = row[j], row[i]
-	row[i].(Mediable).SetPosition(v, i)
-	row[j].(Mediable).SetPosition(v, j)
-}
-
 // TODO: improve matching mime -> ContentType
 func getFileMediaType(file multipart.File) (MediaType, bool) {
 	buf := make([]byte, 512)
@@ -860,11 +881,23 @@ func (t *Text) Save() {
 }
 
 func (t *Text) GetVertical() int {
-	return t.Vertical
+	return t.Position.Vertical
 }
 
 func (t *Text) SetVertical(vertical int) {
-	t.Vertical = vertical
+	t.Position.Vertical = vertical
+}
+
+func (t *Text) GetHorizontal() int {
+	return t.Position.Horizontal
+}
+
+func (t *Text) GetPosition() Position {
+	return t.Position
+}
+
+func (t *Text) SetPosition(vertical int, horizontal int) {
+	t.Position.Vertical, t.Position.Horizontal = vertical, horizontal
 }
 
 func (m *EmptyMedia) GetId() uuid.UUID {
@@ -1814,6 +1847,8 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 		work.HandleCanvasMediaUpload(w, r)
 	case "delete-content":
 		work.HandleCanvasDeleteContent(w, r)
+	case "delete-row":
+		work.HandleCanvasDeleteRow(w, r)
 	case "delete-caption":
 		work.HandleCanvasDeleteCaption(w, r)
 	case "delete-horizontal":

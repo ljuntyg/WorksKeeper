@@ -12,97 +12,102 @@
       </h1>
 
       {{ $nbrRows := len .Contents }}
-      {{ range .Contents }}
-      {{ $first := index . 0 }}
-      <fieldset>
-        <legend>
-          <button type="submit" name="action" value="delete-content:{{ $first.GetId }}">
-            ✕
-          </button>
-
-          {{ if ne $first.GetVertical 0 }}
-          <button type="submit" name="action" value="move-up:{{ $first.GetId }}">
-            ↑
-          </button>
-          {{ end }}
-
-          {{ if ne (add $first.GetVertical 1) $nbrRows }}
-          <button type="submit" name="action" value="move-down:{{ $first.GetId }}">
-            ↓
-          </button>
-          {{ end }}
-        </legend>
-
-        {{ $rowLen := len . }}
-        {{ if eq $rowLen 1 }}
-          {{ range . }}
-            {{ .ToEditableHtml }}
-          {{ end }}
-        {{ else }}
-          {{ range . }}
-          <fieldset>
-            <legend>
-              <button type="submit" name="action" value="delete-horizontal:{{ .GetId }}">
-                ✕
-              </button>
-
-              {{ if ne .GetHorizontal 0 }}
-              <button type="submit" name="action" value="horizontal-left:{{ .GetId }}">
-                ←
-              </button>
-              {{ end }}
-
-              {{ if ne (add .GetHorizontal 1) $rowLen }}
-              <button type="submit" name="action" value="horizontal-right:{{ .GetId }}">
-                →
-              </button>
-              {{ end }}
-            </legend>
-
-            {{ .ToEditableHtml }}
-          </fieldset>
-          {{ end }}
+      {{ with .Contents }}
+      <!-- List of rows -->
+      <ol>
+        {{ range . }}
+          {{ if ne 0 (len .) }}
+          {{ $first := index . 0 }}
+          <li>
+            <fieldset>
+    
+              <legend>
+                <button type="submit" name="action" value="delete-row:{{ $first.GetVertical }}">
+                  ✕
+                </button>
+    
+                {{ if ne $first.GetVertical 0 }}
+                <button type="submit" name="action" value="move-up:{{ $first.GetId }}">
+                  ↑
+                </button>
+                {{ end }}
+    
+                {{ if ne (add $first.GetVertical 1) $nbrRows }}
+                <button type="submit" name="action" value="move-down:{{ $first.GetId }}">
+                  ↓
+                </button>
+                {{ end }}
+              </legend>
+  
+              <!-- List of row items -->
+              <ol>
+                {{ $rowLen := len . }}
+                {{ range . }}
+                <li>
+                  
+                  <fieldset>
+                    {{ if ne $rowLen 1 }}
+                    <legend>
+                      <button type="submit" name="action" value="delete-horizontal:{{ .GetId }}">
+                        ✕
+                      </button>
+        
+                      {{ if ne .GetHorizontal 0 }}
+                      <button type="submit" name="action" value="horizontal-left:{{ .GetId }}">
+                        ←
+                      </button>
+                      {{ end }}
+        
+                      {{ if ne (add .GetHorizontal 1) $rowLen }}
+                      <button type="submit" name="action" value="horizontal-right:{{ .GetId }}">
+                        →
+                      </button>
+                      {{ end }}
+                    </legend>
+                    {{ end }}
+        
+                    {{ .ToEditableHtml }}
+                  </fieldset>
+  
+                </li>
+                {{ end }}
+              </ol>
+    
+              <menu>
+                <li>
+                  <button type="submit" name="action" value="add-horizontal:{{ $first.GetId }}">
+                    & new neighbor
+                  </button>
+                </li>
+              </menu>
+            </fieldset>
+            {{ end }}
+          </li>
         {{ end }}
-      </fieldset>
+      </ol>
       {{ end }}
   
       <aside>
         <fieldset>
-          <legend>
-            {{ if ne $nbrRows 0 }}
-            <button type="submit" name="action" value="save:">
-              Save
-            </button>
-            {{ else }}
-            Compose
-            {{ end }}
-
-            work
-          </legend>
-
-          <button type="submit" name="action" value="add-text:{{ .GetId }}">
-            &
-          </button>
-
-          with text
           
-          <br>
-          <button type="submit" name="action" value="add-media:{{ .GetId }}">
-            &
-          </button>
+          <menu>
+            <li>
+              <button type="submit" name="action" value="add-text:{{ .GetId }}">
+                & new text
+              </button>
+            </li>
+            
+            <li>
+              <button type="submit" name="action" value="add-media:{{ .GetId }}">
+                & new media
+              </button>
+            </li>
+          </menu>
 
-          with sound, video or image
-
-          {{ if ne $nbrRows 0 }}
-          <br>
-          <br>
-          or
           <button type="submit" name="action" value="view:">
-            view
+            View work
           </button>
 
-          work
-          {{ end }}
         </fieldset>
       </aside>
     </form>
