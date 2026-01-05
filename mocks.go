@@ -40,14 +40,12 @@ type WorksKeeperDB struct {
 	Listings map[Numbering]Listable
 	Contents map[uuid.UUID]Contentable
 	Tags     map[uuid.UUID]Tag
-	/* Filters  map[Numbering]*Filter */
 }
 
 var mockDb = &WorksKeeperDB{
 	Listings: make(map[Numbering]Listable),
 	Contents: make(map[uuid.UUID]Contentable),
 	Tags:     make(map[uuid.UUID]Tag),
-	/* Filters:  make(map[Numbering]*Filter), */
 }
 
 var mockTags = []*Tag{
@@ -93,8 +91,9 @@ var currentFilter = 0
 
 var maxNestedSeries = 2
 var maxWorkContents = 10
-var maxSeriesListings = 4
-var maxWorks = 3
+var maxSeriesListings = 2
+var maxWorks = 2
+var maxSeries = 2
 
 func init() {
 	log.Println("calling MOCK init()")
@@ -108,11 +107,11 @@ func init() {
 		AllTags: initMockTagValues(),
 	}
 
-	for range maxWorks / 3 {
+	for range maxSeries {
 		getMockSeries().Save()
 	}
 
-	for range 2 * maxWorks / 3 {
+	for range maxWorks {
 		getMockWork().Save()
 	}
 }
@@ -521,8 +520,10 @@ func getMockNumbering(typeCounter *int, typeString string) Numbering {
 func getMockFilter() *Filter {
 	log.Println("calling MOCK getMockFilter()")
 
+	listings, _ := getNListings(10)
+
 	return &Filter{
-		Listables:    getNListings(10),
+		Listables:    listings,
 		FilterGroups: createFilterGroupsFromTags(getMockTags()),
 	}
 }

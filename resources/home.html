@@ -1,34 +1,31 @@
 <html>
   <body>
 
+    <!-- *ListingsAddedN is passed in -->
+
     <a href="/compose/work">Submit work</a>
 
-    <table>
-      <tr style="text-align: left">
-        <th>Time required</th>
-        <th>Title</th>
-      </tr>
-      {{ range .Data }}
-      <tr>
-        <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
-        <td><a href="{{ .GetNumberingUrlString }}">{{ .GetTitle }}</a></td>
-      </tr>
-      {{ end }}
-    </table>
-
-    <menu>
-      <li>
-        <button type="submit" name="action" value="more-works:">
-          TODO: & more
-        </button>
-      </li>
-    </menu>
-
-    <a href="/search/works">Search works</a>
-
-    <!-- TODO: implement
+    
     <form method="post">
-      {{ if lt (len .Data) 6 }}
+
+      <table>
+        <tr style="text-align: left">
+          <th>Time required</th>
+          <th>Title</th>
+        </tr>
+
+        {{ range .Listings }}
+        {{ $numberingString := .GetNumberingUrlString }}
+        <tr>
+          <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
+          <td><a href="{{ $numberingString }}">{{ .GetTitle }}</a></td>
+
+          <input type="hidden" name="listing-numberings" value="{{ $numberingString }}">
+        </tr>
+        {{ end }}
+      </table>
+      
+      {{ if and (lt (len .Listings) 15) (eq .HasMore true) }}
       <menu>
         <li>
           <button type="submit" name="action" value="more-works:">
@@ -39,8 +36,10 @@
       {{ else }}
       <a href="/search/works">Search works</a>
       {{ end }}
-    </form>
 
+    </form>
+    
+    
     <script>
       document.querySelector('form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -70,6 +69,6 @@
           console.error('Error submitting form:', error);
         }
       });
-    </script> -->
+    </script>
   </body>
 </html>

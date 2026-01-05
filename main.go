@@ -77,7 +77,7 @@ type Matrixable interface {
 }
 
 type HandlerCanvasable interface {
-	HandleCanvasGet(w http.ResponseWriter, r *http.Request)
+	HandleCanvasGetExisting(w http.ResponseWriter, r *http.Request)
 	HandleCanvasExistingData(w http.ResponseWriter, r *http.Request)
 	HandleCanvasAddText(w http.ResponseWriter, r *http.Request)
 	HandleCanvasAddMedia(w http.ResponseWriter, r *http.Request)
@@ -121,7 +121,7 @@ type Work struct {
 }
 
 type HandlerSearchable interface {
-	HandleSearchGet(w http.ResponseWriter, r *http.Request)
+	HandleSearchGetExisting(w http.ResponseWriter, r *http.Request)
 	HandleSearchAddFilter(w http.ResponseWriter, r *http.Request)
 	HandleSearchRemoveFilter(w http.ResponseWriter, r *http.Request)
 	HandleSearchDoSearch(w http.ResponseWriter, r *http.Request)
@@ -463,7 +463,7 @@ func (w *Work) MoveRight(c Contentable) {
 	w.Save()
 }
 
-func (work *Work) HandleCanvasGet(w http.ResponseWriter, r *http.Request) {
+func (work *Work) HandleCanvasGetExisting(w http.ResponseWriter, r *http.Request) {
 	templ := template.Must(template.New("canvas.html").Funcs(template.FuncMap{
 		"add": func(a, b int) int { return a + b },
 	}).ParseFiles("./resources/canvas.html"))
@@ -657,7 +657,7 @@ func swap(row []Contentable, i, j, v int) {
 //
 // \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 
-func (filter *Filter) HandleSearchGet(w http.ResponseWriter, r *http.Request) {
+func (filter *Filter) HandleSearchGetExisting(w http.ResponseWriter, r *http.Request) {
 	templ := template.Must(template.New("search.html").Funcs(template.FuncMap{
 		"formatTime": formatTimeRequired,
 		"add":        func(a, b int) int { return a + b },
@@ -1421,14 +1421,52 @@ func getAllListings() []Listable {
 }
 
 // TODO:
-func getNListings(n int) []Listable {
+// returns bool true if n+1 new were available
+func getNListings(n int) ([]Listable, bool) {
 	listings := getAllListings()
 
-	if len(listings) < n {
-		return listings
-	} else {
-		return listings[:n]
+	available := len(listings)
+	if available < n {
+		return listings, false
+	} else if available >= n+1 {
+		return listings[:n], true
+	} else { // n <= available < n+1 -> available == n, n+1 not available
+		return listings[:n], false
 	}
+}
+
+// TODO:
+// returns bool true if n+1 new were available
+func getNewListings(n int, existing []Listable) ([]Listable, bool) {
+	if existing == nil {
+		return getNListings(n)
+	}
+
+	log.Printf("all listings size: %d", len(getAllListings()))
+
+	existingSet := make(map[uuid.UUID]struct{}, len(existing))
+	for _, e := range existing {
+		existingSet[e.GetId()] = struct{}{}
+	}
+
+	result := make([]Listable, 0, n)
+	hasMore := false
+	nAdded := 0
+	for _, l := range getAllListings() {
+		if _, found := existingSet[l.GetId()]; found {
+			continue
+		}
+
+		nAdded++
+		if nAdded == n+1 {
+			hasMore = true
+			break
+		}
+
+		result = append(result, l)
+	}
+
+	return append(existing, result...), hasMore
 }
 
 // TODO:
@@ -1740,33 +1778,53 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 func viewWorksHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		viewWorksGetHandler(w, r)
+		viewNewWorksHandler(w, r)
 	case http.MethodPost:
 		viewWorksPostHandler(w, r)
 	}
 }
 
-func viewWorksGetHandler(w http.ResponseWriter, r *http.Request) {
+type ListingsHasMore struct {
+	Listings []Listable
+	HasMore  bool
+}
+
+func viewNewWorksHandler(w http.ResponseWriter, r *http.Request) {
 	templ := template.Must(template.New("home.html").Funcs(template.FuncMap{
 		"formatTime": formatTimeRequired,
 	}).ParseFiles("./resources/home.html"))
 
 	// TODO:
-	listings := getNListings(10)
-	templateData := createTemplateData(listings)
+	listings, hasMore := getNewListings(5, nil)
 
-	templ.Execute(w, templateData)
+	templ.Execute(w, &ListingsHasMore{
+		Listings: listings,
+		HasMore:  hasMore,
+	})
+}
+
+func viewHandlerGetExisting(w http.ResponseWriter, r *http.Request, listings *ListingsHasMore) {
+	templ := template.Must(template.New("home.html").Funcs(template.FuncMap{
+		"formatTime": formatTimeRequired,
+	}).ParseFiles("./resources/home.html"))
+	templ.Execute(w, listings)
 }
 
 // TODO:
 func viewWorksPostHandler(w http.ResponseWriter, r *http.Request) {
 	action, _ := extractActionAndValueFromRequest(r)
+	listings := extractListingsFromRequest(r)
 
+	hasMore := false
 	switch action {
 	case "more-works":
-		// TODO:
-		panic("more-works unimplemented")
+		listings, hasMore = getNewListings(5, listings)
 	}
+
+	viewHandlerGetExisting(w, r, &ListingsHasMore{
+		Listings: listings,
+		HasMore:  hasMore,
+	})
 }
 
 func searchWorksHandler(w http.ResponseWriter, r *http.Request) {
@@ -1780,7 +1838,7 @@ func searchWorksHandler(w http.ResponseWriter, r *http.Request) {
 
 func searchWorksNewFilterHandler(w http.ResponseWriter, r *http.Request) {
 	newFilter := getNewFilter()
-	newFilter.HandleSearchGet(w, r)
+	newFilter.HandleSearchGetExisting(w, r)
 }
 
 // TODO: handle search
@@ -1795,7 +1853,7 @@ func searchWorksPostHandler(w http.ResponseWriter, r *http.Request) {
 		filter.HandleSearchRemoveFilter(w, r)
 	}
 
-	filter.HandleSearchGet(w, r)
+	filter.HandleSearchGetExisting(w, r)
 }
 
 func viewWorkHandler(w http.ResponseWriter, r *http.Request) {
@@ -1829,7 +1887,7 @@ func createWorkHandler(w http.ResponseWriter, r *http.Request) {
 
 func createWorkGetHandler(w http.ResponseWriter, r *http.Request) {
 	work := getWorkFromRequest(r)
-	work.HandleCanvasGet(w, r)
+	work.HandleCanvasGetExisting(w, r)
 }
 
 func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
@@ -1866,7 +1924,7 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 		work.HandleCanvasDeleteHorizontal(w, r)
 	}
 
-	work.HandleCanvasGet(w, r)
+	work.HandleCanvasGetExisting(w, r)
 }
 
 // TODO:
