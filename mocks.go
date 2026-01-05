@@ -22,7 +22,6 @@ type Database interface {
 	SaveSound(s *Sound)
 	SaveVideo(v *Video)
 	SaveImage(i *Image)
-	SaveFilter(f *Filter)
 
 	GetWork(numbering Numbering) *Work
 	GetSeries(numbering Numbering) *Series
@@ -33,7 +32,6 @@ type Database interface {
 	GetSound(id uuid.UUID) *Sound
 	GetVideo(id uuid.UUID) *Video
 	GetImage(id uuid.UUID) *Image
-	GetFilter(numbering Numbering) *Filter
 
 	GetAllListings() []Listable
 }
@@ -42,14 +40,14 @@ type WorksKeeperDB struct {
 	Listings map[Numbering]Listable
 	Contents map[uuid.UUID]Contentable
 	Tags     map[uuid.UUID]Tag
-	Filters  map[Numbering]*Filter
+	/* Filters  map[Numbering]*Filter */
 }
 
 var mockDb = &WorksKeeperDB{
 	Listings: make(map[Numbering]Listable),
 	Contents: make(map[uuid.UUID]Contentable),
 	Tags:     make(map[uuid.UUID]Tag),
-	Filters:  make(map[Numbering]*Filter),
+	/* Filters:  make(map[Numbering]*Filter), */
 }
 
 var mockTags = []*Tag{
@@ -95,7 +93,7 @@ var currentFilter = 0
 
 var maxNestedSeries = 2
 var maxWorkContents = 10
-var maxSeriesListings = 3
+var maxSeriesListings = 4
 var maxWorks = 3
 
 func init() {
@@ -111,11 +109,11 @@ func init() {
 	}
 
 	for range maxWorks / 3 {
-		getMockSeries()
+		getMockSeries().Save()
 	}
 
 	for range 2 * maxWorks / 3 {
-		getMockWork()
+		getMockWork().Save()
 	}
 }
 
@@ -196,10 +194,6 @@ func (db *WorksKeeperDB) SaveVideo(v *Video) {
 
 func (db *WorksKeeperDB) SaveImage(i *Image) {
 	db.Contents[i.GetId()] = i
-}
-
-func (db *WorksKeeperDB) SaveFilter(f *Filter) {
-	db.Filters[f.Numbering] = f
 }
 
 func (db *WorksKeeperDB) GetWork(numbering Numbering) *Work {
@@ -321,15 +315,6 @@ func (db *WorksKeeperDB) GetVideo(id uuid.UUID) *Video {
 	}
 
 	return video
-}
-
-func (db *WorksKeeperDB) GetFilter(numbering Numbering) *Filter {
-	f, ok := db.Filters[numbering]
-	if !ok {
-		panic("GetFilter: no content with that numbering")
-	}
-
-	return f
 }
 
 func getMockTagValues(t *Tag) *TagValues {
@@ -537,8 +522,7 @@ func getMockFilter() *Filter {
 	log.Println("calling MOCK getMockFilter()")
 
 	return &Filter{
-		Id:           uuid.New(),
-		Numbering:    getMockNumbering(&currentFilter, "filter"),
+		Listables:    getNListings(10),
 		FilterGroups: createFilterGroupsFromTags(getMockTags()),
 	}
 }
@@ -609,7 +593,7 @@ func getMockNumberingRandom() int {
 
 	var buf bytes.Buffer
 	for range 3 {
-		buf.WriteString(fmt.Sprintf("%d", rng.Intn(9)+1))
+		fmt.Fprintf(&buf, "%d", rng.Intn(9)+1)
 	}
 
 	ret, err := strconv.Atoi(buf.String())

@@ -77,6 +77,7 @@ type Matrixable interface {
 }
 
 type HandlerCanvasable interface {
+	HandleCanvasGet(w http.ResponseWriter, r *http.Request)
 	HandleCanvasExistingData(w http.ResponseWriter, r *http.Request)
 	HandleCanvasAddText(w http.ResponseWriter, r *http.Request)
 	HandleCanvasAddMedia(w http.ResponseWriter, r *http.Request)
@@ -93,6 +94,21 @@ type HandlerCanvasable interface {
 	HandleCanvasDeleteHorizontal(w http.ResponseWriter, r *http.Request)
 }
 
+type TagValues struct {
+	Name                  string
+	PossibleValues        []string
+	PossibleModeModifiers []string
+	PossibleFilterModes   []string
+}
+
+type Tag struct {
+	Id           uuid.UUID
+	Name         string
+	Value        string
+	ModeModifier string
+	FilterMode   string
+}
+
 type Work struct {
 	Id           uuid.UUID
 	Numbering    Numbering
@@ -105,22 +121,16 @@ type Work struct {
 }
 
 type HandlerSearchable interface {
+	HandleSearchGet(w http.ResponseWriter, r *http.Request)
 	HandleSearchAddFilter(w http.ResponseWriter, r *http.Request)
 	HandleSearchRemoveFilter(w http.ResponseWriter, r *http.Request)
 	HandleSearchDoSearch(w http.ResponseWriter, r *http.Request)
 }
 
-type FilterGroup struct {
-	Name string
-	Tags []*Tag
-}
-
 type Filter struct {
-	Id               uuid.UUID
-	Numbering        Numbering
-	FilterGroups     []*FilterGroup
-	FilterVisibility string
-	PreviousTag      string // Name of previous Tag added to the filter, or "" if a Tag was removed or none have been added
+	Listables    []Listable
+	FilterGroups map[string][]*Tag
+	PreviousTag  string // Name of previous Tag added to the filter, or "" if a Tag was removed or none have been added
 }
 
 type Pathable interface {
@@ -131,21 +141,6 @@ type Pathable interface {
 type Templatable interface {
 	Pathable
 	ToHtml() template.HTML
-}
-
-type Tag struct {
-	Id           uuid.UUID
-	Name         string
-	Value        string
-	ModeModifier string
-	FilterMode   string
-}
-
-type TagValues struct {
-	Name                  string
-	PossibleValues        []string
-	PossibleModeModifiers []string
-	PossibleFilterModes   []string
 }
 
 type Editable interface {
@@ -298,12 +293,6 @@ func (s *Series) String() string {
 }
 
 func (s *Series) GetNumberingUrlString() string {
-	/* centuryString := fmt.Sprintf("%d%s", s.Numbering.Century, getEnglishNumberSuffix(s.Numbering.Century))
-	yearString := fmt.Sprintf("%d%s", s.Numbering.Year, getEnglishNumberSuffix(s.Numbering.Year))
-	dayString := fmt.Sprintf("%d%s", s.Numbering.Day, getEnglishNumberSuffix(s.Numbering.Day)) */
-
-	// return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", s.Numbering.Type, s.Numbering.Random, s.Numbering.Serial, centuryString, yearString, dayString)
-
 	return s.Numbering.numberingToUrlString()
 }
 
@@ -348,12 +337,6 @@ func (w *Work) String() string {
 }
 
 func (w *Work) GetNumberingUrlString() string {
-	/* centuryString := fmt.Sprintf("%d%s", w.Numbering.Century, getEnglishNumberSuffix(w.Numbering.Century))
-	yearString := fmt.Sprintf("%d%s", w.Numbering.Year, getEnglishNumberSuffix(w.Numbering.Year))
-	dayString := fmt.Sprintf("%d%s", w.Numbering.Day, getEnglishNumberSuffix(w.Numbering.Day)) */
-
-	// return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", w.Numbering.Type, w.Numbering.Random, w.Numbering.Serial, centuryString, yearString, dayString)
-
 	return w.Numbering.numberingToUrlString()
 }
 
@@ -480,6 +463,14 @@ func (w *Work) MoveRight(c Contentable) {
 	w.Save()
 }
 
+func (work *Work) HandleCanvasGet(w http.ResponseWriter, r *http.Request) {
+	templ := template.Must(template.New("canvas.html").Funcs(template.FuncMap{
+		"add": func(a, b int) int { return a + b },
+	}).ParseFiles("./resources/canvas.html"))
+	templ.Execute(w, work)
+}
+
+// Only call on a post request
 func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseMultipartForm(10 << 20) // TODO: increase?
 	if err != nil {
@@ -666,19 +657,14 @@ func swap(row []Contentable, i, j, v int) {
 //
 // \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 
-func (f *Filter) GetNumberingUrlString() string {
-	/* centuryString := fmt.Sprintf("%d%s", f.Numbering.Century, getEnglishNumberSuffix(f.Numbering.Century))
-	yearString := fmt.Sprintf("%d%s", f.Numbering.Year, getEnglishNumberSuffix(f.Numbering.Year))
-	dayString := fmt.Sprintf("%d%s", f.Numbering.Day, getEnglishNumberSuffix(f.Numbering.Day)) */
+func (filter *Filter) HandleSearchGet(w http.ResponseWriter, r *http.Request) {
+	templ := template.Must(template.New("search.html").Funcs(template.FuncMap{
+		"formatTime": formatTimeRequired,
+		"add":        func(a, b int) int { return a + b },
+	}).ParseFiles("./resources/search.html"))
 
-	// return fmt.Sprintf("/%s/%d%d/of/%s/century/%s/year/%s/day", f.Numbering.Type, f.Numbering.Random, f.Numbering.Serial, centuryString, yearString, dayString)
-
-	return f.Numbering.numberingToUrlString()
-}
-
-// TODO:
-func (f *Filter) Save() {
-	getMockDb().SaveFilter(f)
+	templateData := createTemplateData(filter)
+	templ.Execute(w, templateData)
 }
 
 func (filter *Filter) HandleSearchAddFilter(w http.ResponseWriter, r *http.Request) {
@@ -692,7 +678,6 @@ func (filter *Filter) HandleSearchAddFilter(w http.ResponseWriter, r *http.Reque
 	existingTags = append(existingTags, newFilterTag)
 	filter.FilterGroups = createFilterGroupsFromTags(existingTags)
 	filter.PreviousTag = newFilterTag.Name
-	filter.Save()
 }
 
 func (filter *Filter) HandleSearchRemoveFilter(w http.ResponseWriter, r *http.Request) {
@@ -707,7 +692,6 @@ func (filter *Filter) HandleSearchRemoveFilter(w http.ResponseWriter, r *http.Re
 	existingTags = append(existingTags[:idx], existingTags[idx+1:]...)
 	filter.FilterGroups = createFilterGroupsFromTags(existingTags)
 	filter.PreviousTag = ""
-	filter.Save()
 }
 
 func (filter *Filter) HandleSearchDoSearch(w http.ResponseWriter, r *http.Request) {
@@ -1423,10 +1407,33 @@ func getNewFilter() *Filter {
 }
 
 // TODO:
+func getNewWork() *Work {
+	work := getMockEmptyWork()
+	work.Save()
+	return work
+}
+
+// TODO:
 func getAllListings() []Listable {
 	return slices.Collect(
 		maps.Values(getMockDb().Listings),
 	)
+}
+
+// TODO:
+func getNListings(n int) []Listable {
+	listings := getAllListings()
+
+	if len(listings) < n {
+		return listings
+	} else {
+		return listings[:n]
+	}
+}
+
+// TODO:
+func getListing(numbering Numbering) Listable {
+	return getMockDb().Listings[numbering]
 }
 
 // TODO:
@@ -1475,10 +1482,11 @@ func getImage(id uuid.UUID) *Image {
 }
 
 // TODO:
-func getFilter(numbering Numbering) *Filter {
+/* func getFilter(numbering Numbering) *Filter {
 	return getMockDb().GetFilter(numbering)
-}
+} */
 
+// TODO:
 func getHtmlEnvironment() *HtmlEnvironment {
 	return getMockHtmlEnvironment()
 }
@@ -1561,7 +1569,6 @@ func urlStringToNumbering(s string, typeString string) (Numbering, error) {
 	}
 
 	n := 5
-	log.Println("GOT s to handle: " + s)
 	vals := make([]int, n)
 	pos := 0
 	for i := range n {
@@ -1587,8 +1594,6 @@ func urlStringToNumbering(s string, typeString string) (Numbering, error) {
 		vals[i] = val
 	}
 
-	log.Printf("incoming string was: %s, resulting vals are: %v", s, vals)
-
 	return Numbering{
 		Random:  vals[0],
 		Serial:  vals[1],
@@ -1606,11 +1611,6 @@ func mustUrlStringToNumbering(s string, typeString string) Numbering {
 	}
 
 	return numbering
-}
-
-// TODO:
-func getFilterByNumbering(numbering Numbering) *Filter {
-	return getMockDb().GetFilter(numbering)
 }
 
 // Assumes all inputs (which should be buttons) with name "action" are of the format
@@ -1650,7 +1650,7 @@ func extractTagsFromRequest(r *http.Request) []*Tag {
 	return existingTags
 }
 
-func createFilterGroupsFromTags(tags []*Tag) []*FilterGroup {
+func createFilterGroupsFromTags(tags []*Tag) map[string][]*Tag {
 	tagsNamed := make(map[string][]*Tag)
 	groupOrder := []string{}
 
@@ -1661,15 +1661,34 @@ func createFilterGroupsFromTags(tags []*Tag) []*FilterGroup {
 		tagsNamed[tag.Name] = append(tagsNamed[tag.Name], tag)
 	}
 
-	filterGroups := make([]*FilterGroup, 0, len(groupOrder))
-	for _, tagName := range groupOrder {
-		filterGroups = append(filterGroups, &FilterGroup{
-			Name: tagName,
-			Tags: tagsNamed[tagName],
-		})
+	return tagsNamed
+}
+
+func extractListingsFromRequest(r *http.Request) []Listable {
+	err := r.ParseForm()
+	if err != nil {
+		panic("unexpected error parsing form")
 	}
 
-	return filterGroups
+	listingIds := r.Form["listing-numberings"]
+	listings := make([]Listable, len(listingIds))
+	for i, numberingString := range listingIds {
+		listingType, numbering, found := strings.Cut(strings.TrimPrefix(numberingString, "/"), "/")
+		if !found {
+			panic("unexpected error extracting listing")
+		}
+
+		listings[i] = getListing(mustUrlStringToNumbering(numbering, listingType))
+	}
+
+	return listings
+}
+
+func extractFilterFromRequest(r *http.Request) *Filter {
+	return &Filter{
+		Listables:    extractListingsFromRequest(r),
+		FilterGroups: createFilterGroupsFromTags(extractTagsFromRequest(r)),
+	}
 }
 
 func mustCombineNumbers(numbers []int) int {
@@ -1723,9 +1742,7 @@ func viewWorksHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		viewWorksGetHandler(w, r)
 	case http.MethodPost:
-		searchWorksNewFilterHandler(w, r)
-	default:
-		http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+		viewWorksPostHandler(w, r)
 	}
 }
 
@@ -1734,59 +1751,42 @@ func viewWorksGetHandler(w http.ResponseWriter, r *http.Request) {
 		"formatTime": formatTimeRequired,
 	}).ParseFiles("./resources/home.html"))
 
-	listings := getAllListings()
+	// TODO:
+	listings := getNListings(10)
 	templateData := createTemplateData(listings)
 
 	templ.Execute(w, templateData)
 }
 
+// TODO:
+func viewWorksPostHandler(w http.ResponseWriter, r *http.Request) {
+	action, _ := extractActionAndValueFromRequest(r)
+
+	switch action {
+	case "more-works":
+		// TODO:
+		panic("more-works unimplemented")
+	}
+}
+
 func searchWorksHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		searchWorksGetHandler(w, r)
+		searchWorksNewFilterHandler(w, r)
 	case http.MethodPost:
 		searchWorksPostHandler(w, r)
-	default:
-		searchWorksNewFilterHandler(w, r)
 	}
 }
 
 func searchWorksNewFilterHandler(w http.ResponseWriter, r *http.Request) {
 	newFilter := getNewFilter()
-	newFilter.Save()
-
-	http.Redirect(w, r, r.URL.Path+"/with/"+newFilter.GetNumberingUrlString(), http.StatusSeeOther)
-}
-
-func searchWorksGetHandler(w http.ResponseWriter, r *http.Request) {
-	templ := template.Must(template.New("search.html").Funcs(template.FuncMap{
-		"formatTime": formatTimeRequired,
-		"add":        func(a, b int) int { return a + b },
-	}).ParseFiles("./resources/search.html"))
-
-	listings := getAllListings()
-	numbering := mustUrlStringToNumbering(r.PathValue("numbering"), "filter")
-
-	filter := getFilterByNumbering(numbering)
-
-	type ListablesFilter struct {
-		Listables []Listable
-		Filter    *Filter
-	}
-
-	templateData := createTemplateData(&ListablesFilter{
-		Listables: listings,
-		Filter:    filter,
-	})
-
-	templ.Execute(w, templateData)
+	newFilter.HandleSearchGet(w, r)
 }
 
 // TODO: handle search
 func searchWorksPostHandler(w http.ResponseWriter, r *http.Request) {
 	action, _ := extractActionAndValueFromRequest(r)
-	numbering := mustUrlStringToNumbering(r.PathValue("numbering"), "filter")
-	filter := getFilterByNumbering(numbering)
+	filter := extractFilterFromRequest(r)
 
 	switch action {
 	case "add-filter":
@@ -1795,7 +1795,7 @@ func searchWorksPostHandler(w http.ResponseWriter, r *http.Request) {
 		filter.HandleSearchRemoveFilter(w, r)
 	}
 
-	searchWorksGetHandler(w, r)
+	filter.HandleSearchGet(w, r)
 }
 
 func viewWorkHandler(w http.ResponseWriter, r *http.Request) {
@@ -1806,12 +1806,16 @@ func viewWorkHandler(w http.ResponseWriter, r *http.Request) {
 
 func viewSeriesHandler(w http.ResponseWriter, r *http.Request) {
 	series := getSeriesFromRequest(r)
-
 	templ := template.Must(template.New("series.html").Funcs(template.FuncMap{
 		"formatTime": formatTimeRequired,
 	}).ParseFiles("./resources/series.html"))
 
 	templ.Execute(w, series)
+}
+
+func createNewWorkHandler(w http.ResponseWriter, r *http.Request) {
+	newWork := getNewWork()
+	http.Redirect(w, r, "/compose"+newWork.GetNumberingUrlString(), http.StatusSeeOther)
 }
 
 func createWorkHandler(w http.ResponseWriter, r *http.Request) {
@@ -1820,15 +1824,12 @@ func createWorkHandler(w http.ResponseWriter, r *http.Request) {
 		createWorkGetHandler(w, r)
 	case http.MethodPost:
 		createWorkPostHandler(w, r)
-	default:
-		createNewWorkHandler(w, r)
 	}
 }
 
-func createNewWorkHandler(w http.ResponseWriter, r *http.Request) {
-	newWork := getMockEmptyWork()
-	newWork.Save()
-	http.Redirect(w, r, "/compose"+newWork.GetNumberingUrlString(), http.StatusSeeOther)
+func createWorkGetHandler(w http.ResponseWriter, r *http.Request) {
+	work := getWorkFromRequest(r)
+	work.HandleCanvasGet(w, r)
 }
 
 func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
@@ -1865,15 +1866,7 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 		work.HandleCanvasDeleteHorizontal(w, r)
 	}
 
-	createWorkGetHandler(w, r)
-}
-
-func createWorkGetHandler(w http.ResponseWriter, r *http.Request) {
-	work := getWorkFromRequest(r)
-	templ := template.Must(template.New("canvas.html").Funcs(template.FuncMap{
-		"add": func(a, b int) int { return a + b },
-	}).ParseFiles("./resources/canvas.html"))
-	templ.Execute(w, work)
+	work.HandleCanvasGet(w, r)
 }
 
 // TODO:
@@ -1895,8 +1888,7 @@ func main() {
 	mux.HandleFunc("/{$}", homeHandler)
 	mux.HandleFunc("/works", viewWorksHandler)
 
-	mux.HandleFunc("/search/works", searchWorksNewFilterHandler)
-	mux.HandleFunc("/search/works/with/filter/{numbering}", searchWorksHandler)
+	mux.HandleFunc("/search/works", searchWorksHandler)
 
 	mux.HandleFunc("/work/{numbering}", viewWorkHandler)
 	mux.HandleFunc("/series/{numbering}", viewSeriesHandler)

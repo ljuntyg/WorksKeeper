@@ -1,30 +1,44 @@
 <html>
   <body>
 
-    <!-- ListablesFilter is passed in as Data -->
+    <!-- *Filter is passed in as Data -->
     
-    <table>
-      <tr style="text-align: left">
-        <th>Time required</th>
-        <th>Title</th>
-      </tr>
-      {{ range .Data.Listables }}
-      <tr>
-        <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
-        <td><a href="{{ .GetNumberingUrlString }}">{{ .GetTitle }}</a></td>
-      </tr>
-      {{ end }}
-    </table>
+    <form method="post">
 
-    <aside>
-      <form method="post">
+      <table>
+        <tr style="text-align: left">
+          <th>Time required</th>
+          <th>Title</th>
+        </tr>
+
+        {{ range .Data.Listables }}
+        {{ $numberingString := .GetNumberingUrlString }}
+        <tr>
+          <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
+          <td><a href="{{ $numberingString }}">{{ .GetTitle }}</a></td>
+
+          <input type="hidden" name="listing-numberings" value="{{ $numberingString }}">
+        </tr>
+        {{ end }}
+      </table>
+
+      <menu>
+        <li>
+          <button type="submit" name="action" value="more-works:">
+            TODO: & more
+          </button>
+        </li>
+      </menu>
+
+      <aside>
         <fieldset>
+
           <menu>
             <li>
               <select name="filter-tag">
                 {{ range .Environment.AllTags }}
                 <option value="{{ .Name }}"
-                  {{ if eq .Name $.Data.Filter.PreviousTag }}selected{{ end }}>
+                  {{ if eq .Name $.Data.PreviousTag }}selected{{ end }}>
                   {{ .Name }}
                 </option>
                 {{ end }}
@@ -36,20 +50,19 @@
             </li>
           </menu>
 
-          {{ with .Data.Filter.FilterGroups }}
+          {{ with .Data.FilterGroups }}
           <ul>
-          <!-- list already added filters -->
-            <!-- TODO: use Id for tags instead -->
+            <!-- list already added filters -->
             {{ $globalIdx := 0 }}
-            {{ range . }}
+            {{ range $name, $tags := . }}
             <li>
               <fieldset>
 
                 <legend>
-                  {{ .Name }}
+                  {{ $name }}
                 </legend>
                 
-                {{ range .Tags  }}
+                {{ range $tags }}
                 <li>
                   {{ .ToHtml }}
                   
@@ -64,7 +77,6 @@
               </fieldset>
             </li>
             {{ end }}
-
           </ul>
           {{ end }}
 
@@ -73,9 +85,10 @@
           </button>
 
         </fieldset>
-      </form>
-    </aside>
+      </aside>
 
+    </form>
+      
     <script>
       document.querySelector('form').addEventListener('submit', async (e) => {
         e.preventDefault();

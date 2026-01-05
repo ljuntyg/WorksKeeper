@@ -2,7 +2,6 @@
   <body>
 
     <a href="/compose/work">Submit work</a>
-    <a href="/search/works">Search works</a>
 
     <table>
       <tr style="text-align: left">
@@ -17,5 +16,60 @@
       {{ end }}
     </table>
 
+    <menu>
+      <li>
+        <button type="submit" name="action" value="more-works:">
+          TODO: & more
+        </button>
+      </li>
+    </menu>
+
+    <a href="/search/works">Search works</a>
+
+    <!-- TODO: implement
+    <form method="post">
+      {{ if lt (len .Data) 6 }}
+      <menu>
+        <li>
+          <button type="submit" name="action" value="more-works:">
+            & more
+          </button>
+        </li>
+      </menu>
+      {{ else }}
+      <a href="/search/works">Search works</a>
+      {{ end }}
+    </form>
+
+    <script>
+      document.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        
+        const submitter = e.submitter;
+        if (submitter && submitter.name) {
+          formData.append(submitter.name, submitter.value);
+        }
+        
+        try {
+          const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (response.ok) {
+            const html = await response.text();
+            document.open();
+            document.write(html);
+            document.close();
+          } else {
+            console.error('Form submission failed:', response.status);
+          }
+        } catch (error) {
+          console.error('Error submitting form:', error);
+        }
+      });
+    </script> -->
   </body>
 </html>
