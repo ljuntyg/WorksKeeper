@@ -77,6 +77,7 @@ type Matrixable interface {
 }
 
 type HandlerCanvasable interface {
+	HandleCanvasSaveView(w http.ResponseWriter, r *http.Request)
 	HandleCanvasGetExisting(w http.ResponseWriter, r *http.Request)
 	HandleCanvasExistingData(w http.ResponseWriter, r *http.Request)
 	HandleCanvasAddText(w http.ResponseWriter, r *http.Request)
@@ -463,6 +464,14 @@ func (w *Work) MoveRight(c Contentable) {
 	w.Save()
 }
 
+func (work *Work) HandleCanvasSaveView(w http.ResponseWriter, r *http.Request) {
+	work.HandleCanvasExistingData(w, r)
+
+	// TODO: duplicated from view work handler
+	templ := template.Must(template.New("work.html").ParseFiles("./resources/work.html"))
+	templ.Execute(w, work)
+}
+
 func (work *Work) HandleCanvasGetExisting(w http.ResponseWriter, r *http.Request) {
 	templ := template.Must(template.New("canvas.html").Funcs(template.FuncMap{
 		"add": func(a, b int) int { return a + b },
@@ -474,6 +483,7 @@ func (work *Work) HandleCanvasGetExisting(w http.ResponseWriter, r *http.Request
 func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseMultipartForm(10 << 20) // TODO: increase?
 	if err != nil {
+		// TODO: not always this error
 		http.Error(w, "content uploaded is too large", http.StatusBadRequest)
 		return
 	}
@@ -1873,7 +1883,7 @@ func viewSeriesHandler(w http.ResponseWriter, r *http.Request) {
 
 func createNewWorkHandler(w http.ResponseWriter, r *http.Request) {
 	newWork := getNewWork()
-	http.Redirect(w, r, "/compose"+newWork.GetNumberingUrlString(), http.StatusSeeOther)
+	http.Redirect(w, r, "/compose"+newWork.GetNumberingUrlString(), http.StatusMovedPermanently)
 }
 
 func createWorkHandler(w http.ResponseWriter, r *http.Request) {
@@ -1896,6 +1906,8 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 	work.HandleCanvasExistingData(w, r)
 
 	switch action {
+	case "view-work":
+		work.HandleCanvasSaveView(w, r)
 	case "add-text":
 		work.HandleCanvasAddText(w, r)
 	case "add-media":

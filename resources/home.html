@@ -3,28 +3,40 @@
 
     <!-- *ListingsAddedN is passed in -->
 
-    <a href="/compose/work">Submit work</a>
+    <a href="/compose/work">create</a>
 
     
     <form method="post">
 
       <table>
         <tr style="text-align: left">
-          <th>Time required</th>
-          <th>Title</th>
+          <th>length</th>
+          <th>title</th>
+          <th>about</th>
         </tr>
 
         {{ range .Listings }}
         {{ $numberingString := .GetNumberingUrlString }}
         <tr>
-          <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
-          <td><a href="{{ $numberingString }}">{{ .GetTitle }}</a></td>
+          <td>
+            {{ formatTime .GetTimeRequiredMinutes }}
+          </td>
+          <td>
+            <a href="{{ $numberingString }}">{{ .GetTitle }}</a>
+          </td>
+          <td>
+            <details>
+              <summary></summary>
+              TODO: Description/Summary
+              TODO: Remember if open/closed on post
+            </details>
+          </td>
 
           <input type="hidden" name="listing-numberings" value="{{ $numberingString }}">
         </tr>
         {{ end }}
       </table>
-      
+
       {{ if and (lt (len .Listings) 15) (eq .HasMore true) }}
       <menu>
         <li>
@@ -34,7 +46,11 @@
         </li>
       </menu>
       {{ else }}
-      <a href="/search/works">Search works</a>
+        {{ if eq .HasMore true }}
+        <a href="/search/works">search</a>
+        {{ else }}
+        that's all, for now
+        {{ end }}
       {{ end }}
 
     </form>

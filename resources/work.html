@@ -1,14 +1,45 @@
 <html>
+  <head>
+    <style>
+      .title {
+        text-align: center;
+      }
+
+      .media-container {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+      }
+
+      .content-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .content-container figure img, video {
+        max-height: 80vh;
+        width: 100%;
+        height: 100%;
+        object-fit: scale-down;
+      }
+    </style>
+  </head>
+
   <body>
 
-    <h1>{{ .GetTitle }}</h1>
+    <h1 class="title">
+      {{ .GetTitle }}
+    </h1>
 
     {{ range .Contents }}
-      <section>
+    <section class="media-container">
+      <div class="content-container">
       {{ range . }}
         {{ .ToHtml }}
       {{ end }}
-      </section>
+      </div>
+    </section>
     {{ end }}
 
   </body>
