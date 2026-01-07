@@ -1,0 +1,77 @@
+<h1 class="title">
+  <textarea name="title-text">
+    {{ .GetTitle }}
+  </textarea>
+</h1>
+
+{{ $nbrRows := len .Contents }}
+{{ with .Contents }}
+  {{ range . }}
+    {{ if ne 0 (len .) }}
+    {{ $first := index . 0 }}
+    <fieldset>
+      
+      <legend>
+        <button type="submit" name="action" value="delete-row:{{ $first.GetVertical }}">
+          ✕
+        </button>
+
+        {{ if ne $first.GetVertical 0 }}
+        <button type="submit" name="action" value="move-up:{{ $first.GetId }}">
+          ↑
+        </button>
+        {{ end }}
+
+        {{ if ne (add $first.GetVertical 1) $nbrRows }}
+        <button type="submit" name="action" value="move-down:{{ $first.GetId }}">
+          ↓
+        </button>
+        {{ end }}
+      </legend>
+
+      <section class="row-container">
+        <section class="editables-container">
+
+          <!-- List of row items -->
+          {{ $rowLen := len . }}
+          {{ range . }}
+          <fieldset>
+            {{ if ne 1 $rowLen }}
+            <legend>
+              <button type="submit" name="action" value="delete-horizontal:{{ .GetId }}">
+                ✕
+              </button>
+
+              {{ if ne .GetHorizontal 0 }}
+              <button type="submit" name="action" value="horizontal-left:{{ .GetId }}">
+                ←
+              </button>
+              {{ end }}
+
+              {{ if ne (add .GetHorizontal 1) $rowLen }}
+              <button type="submit" name="action" value="horizontal-right:{{ .GetId }}">
+                →
+              </button>
+              {{ end }}
+            </legend>
+            {{ end }}
+
+            {{ .ToEditableHtml }}
+          </fieldset>
+          {{ end }}
+
+        </section>
+      </section>
+
+      <menu>
+        <li>
+          <button type="submit" name="action" value="add-horizontal:{{ $first.GetId }}">
+            & new neighbor
+          </button>
+        </li>
+      </menu>
+
+    </fieldset>
+    {{ end }}
+  {{ end }}
+{{ end }}

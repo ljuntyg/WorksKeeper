@@ -1,143 +1,29 @@
 <html>
   <head>
-    <style>
-      .title {
-        text-align: center;
-      }
-
-      .row-containter {
-        overflow-x: scroll;
-      }
-
-      .media-container {
-        display: grid;
-        grid-auto-flow: column;
-        grid-auto-columns: minmax(max-content, 1fr);
-      }
-
-      .content-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .content-container figure img, video, audio {
-        max-height: 80vh;
-        width: 100%;
-        height: 100%;
-        object-fit: scale-down;
-      }
-
-      .main-container {
-        display: grid;
-        grid-auto-flow: column;
-        grid-auto-columns: 1fr max-content;
-      }
-
-      .canvas-tools {
-        top: 0;
-        align-self: start;
-        position: sticky;
-      }
-    </style>
+    <link rel="stylesheet" href="/static/canvas.css">
+    <link rel="stylesheet" href="/static/work.css">
+    <link rel="stylesheet" href="/static/style.css">
   </head>
 
   <body>
-
-    <!-- *Work is passed in-->
-
-    <form method="post" enctype="multipart/form-data" class="main-container">
-
-      <main>
-        <h1 class="title">
-          <textarea name="title-text">
-            {{ .GetTitle }}
-          </textarea>
-        </h1>
-  
-        {{ $nbrRows := len .Contents }}
-        {{ with .Contents }}
-          {{ range . }}
-            {{ if ne 0 (len .) }}
-            {{ $first := index . 0 }}
-            <fieldset class="row-container">
-              
-              {{ if ne 1 $nbrRows }}
-              <legend>
-                {{ if ne 1 (len .) }}
-                <button type="submit" name="action" value="delete-row:{{ $first.GetVertical }}">
-                  ✕
-                </button>
-                {{ end }}
     
-                {{ if ne $first.GetVertical 0 }}
-                <button type="submit" name="action" value="move-up:{{ $first.GetId }}">
-                  ↑
-                </button>
-                {{ end }}
+    <!-- WorkEditing is passed in-->
     
-                {{ if ne (add $first.GetVertical 1) $nbrRows }}
-                <button type="submit" name="action" value="move-down:{{ $first.GetId }}">
-                  ↓
-                </button>
-                {{ end }}
-              </legend>
-              {{ end }}
-  
-              <section class="media-container">
-                <!-- List of row items -->
-                {{ $rowLen := len . }}
-                {{ range . }}
-                <fieldset class="content-container">
-                  <legend>
-                    <button type="submit" name="action" value="delete-horizontal:{{ .GetId }}">
-                      ✕
-                    </button>
+    <form method="post" enctype="multipart/form-data" class="aside-with-main-canvas">
       
-                    {{ if ne .GetHorizontal 0 }}
-                    <button type="submit" name="action" value="horizontal-left:{{ .GetId }}">
-                      ←
-                    </button>
-                    {{ end }}
-      
-                    {{ if ne (add .GetHorizontal 1) $rowLen }}
-                    <button type="submit" name="action" value="horizontal-right:{{ .GetId }}">
-                      →
-                    </button>
-                    {{ end }}
-                  </legend>
-  
-                  {{ .ToEditableHtml }}
-                </fieldset>
-                {{ end }}
-              </section>
-  
-              <menu>
-                <li>
-                  <button type="submit" name="action" value="add-horizontal:{{ $first.GetId }}">
-                    & new neighbor
-                  </button>
-                </li>
-              </menu>
-  
-            </fieldset>
-            {{ end }}
-          {{ end }}
-        {{ end }}
-      </main>
-  
-      <aside class="canvas-tools">
+      <aside>
         <fieldset>
           
+          {{ if eq $.Editing true }}
           <menu>
             <li>
-              <button type="submit" name="action" value="add-text:{{ .GetId }}">
+              <button type="submit" name="action" value="add-text:{{ .Work.GetId }}">
                 & new text
               </button>
             </li>
             
             <li>
-              <button type="submit" name="action" value="add-media:{{ .GetId }}">
+              <button type="submit" name="action" value="add-media:{{ .Work.GetId }}">
                 & new media
               </button>
             </li>
@@ -147,8 +33,26 @@
             view work
           </button>
 
+          <input type="hidden" name="editing" value="true">
+          {{ else }}
+          <button type="submit" name="action" value="edit-work:">
+            compose work
+          </button>
+
+          <input type="hidden" name="editing" value="false">
+          {{ end }}
+
         </fieldset>
       </aside>
+
+      <main>
+        {{ if eq $.Editing true }}
+        {{ .Work.ToEditableHtml }}
+        {{ else }}
+        {{ .Work.ToHtml }}
+        {{ end }}
+      </main>
+  
     </form>
 
     <script>

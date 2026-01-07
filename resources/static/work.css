@@ -1,0 +1,24 @@
+.title {
+    text-align: center;
+}
+
+.row-container {
+    display: flex;
+    justify-content: center;
+}
+    
+.contents-container {
+    display: flex;
+    align-items: center;
+}
+    
+video, img, audio {
+    max-height: 80vh;
+    max-width: 100%;
+    object-fit: scale-down;
+}
+
+p {
+    margin-left: 2rem;
+    margin-right: 2rem;
+}

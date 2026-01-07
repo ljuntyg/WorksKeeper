@@ -1,0 +1,23 @@
+.title {
+    text-align: center;
+}
+
+.row-container {
+    display: flex;
+    justify-content: center;
+}
+
+.editables-container {
+    display: flex;
+    align-items: center;
+}
+
+figure {
+    margin: 0;
+}
+
+video, img, audio {
+    max-height: 80vh;
+    max-width: 100%;
+    object-fit: scale-down;
+}

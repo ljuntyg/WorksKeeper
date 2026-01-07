@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// TODO: Make interfaced?
 type HtmlEnvironment struct {
 	AllTags []*TagValues
 }
@@ -43,6 +44,7 @@ type Saveable interface {
 	Save()
 }
 
+// Make Templatable and Editable
 type Listable interface {
 	Numberable
 	Saveable
@@ -77,7 +79,8 @@ type Matrixable interface {
 }
 
 type HandlerCanvasable interface {
-	HandleCanvasSaveView(w http.ResponseWriter, r *http.Request)
+	HandleCanvasGetView(w http.ResponseWriter, r *http.Request)
+	HandleCanvasGetEdit(w http.ResponseWriter, r *http.Request)
 	HandleCanvasGetExisting(w http.ResponseWriter, r *http.Request)
 	HandleCanvasExistingData(w http.ResponseWriter, r *http.Request)
 	HandleCanvasAddText(w http.ResponseWriter, r *http.Request)
@@ -110,6 +113,16 @@ type Tag struct {
 	FilterMode   string
 }
 
+type Templatable interface {
+	Pathable
+	ToHtml() template.HTML
+}
+
+type Editable interface {
+	Pathable
+	ToEditableHtml() template.HTML
+}
+
 type Work struct {
 	Id           uuid.UUID
 	Numbering    Numbering
@@ -137,16 +150,6 @@ type Filter struct {
 type Pathable interface {
 	GetName(prefix string) string
 	GetPath(fileName string) string
-}
-
-type Templatable interface {
-	Pathable
-	ToHtml() template.HTML
-}
-
-type Editable interface {
-	Pathable
-	ToEditableHtml() template.HTML
 }
 
 type Verticable interface {
@@ -464,63 +467,94 @@ func (w *Work) MoveRight(c Contentable) {
 	w.Save()
 }
 
-func (work *Work) HandleCanvasSaveView(w http.ResponseWriter, r *http.Request) {
-	work.HandleCanvasExistingData(w, r)
-
-	// TODO: duplicated from view work handler
-	templ := template.Must(template.New("work.html").ParseFiles("./resources/work.html"))
-	templ.Execute(w, work)
+type WorkEditing struct {
+	Work    *Work
+	Editing bool
 }
 
-func (work *Work) HandleCanvasGetExisting(w http.ResponseWriter, r *http.Request) {
+func (work *Work) HandleCanvasGetView(w http.ResponseWriter, r *http.Request) {
 	templ := template.Must(template.New("canvas.html").Funcs(template.FuncMap{
 		"add": func(a, b int) int { return a + b },
 	}).ParseFiles("./resources/canvas.html"))
-	templ.Execute(w, work)
+	templ.Execute(w, &WorkEditing{
+		work,
+		false,
+	})
+}
+
+func (work *Work) HandleCanvasGetEditable(w http.ResponseWriter, r *http.Request) {
+	templ := template.Must(template.New("canvas.html").Funcs(template.FuncMap{
+		"add": func(a, b int) int { return a + b },
+	}).ParseFiles("./resources/canvas.html"))
+	templ.Execute(w, &WorkEditing{
+		work,
+		true,
+	})
+}
+
+func (work *Work) HandleCanvasGetExisting(w http.ResponseWriter, r *http.Request) {
+	editing, err := strconv.ParseBool(r.FormValue("editing"))
+	if err != nil {
+		// By default, edit
+		work.HandleCanvasGetEditable(w, r)
+	} else if !editing {
+		work.HandleCanvasGetView(w, r)
+	} else {
+		work.HandleCanvasGetEditable(w, r)
+	}
 }
 
 // Only call on a post request
 func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseMultipartForm(10 << 20) // TODO: increase?
-	if err != nil {
-		// TODO: not always this error
-		http.Error(w, "content uploaded is too large", http.StatusBadRequest)
-		return
+	editing, err := strconv.ParseBool(r.FormValue("editing"))
+	if err != nil { // editing should've been passed in and set as a hidden input when getting the canvas before posting
+		panic("unexpected canvas state")
 	}
 
-	// Only when not all contents have been deleted
-	if len(work.Contents) != 0 {
-		for k, v := range r.Form {
-			if strings.HasPrefix(k, "text[") {
-				id, err := uuid.Parse(k[5:41])
-				if err != nil {
-					panic("unexpected error parsing id for text")
+	// Handle data on canvas if editing
+	if editing {
+
+		err := r.ParseMultipartForm(10 << 20) // TODO: increase?
+		if err != nil {
+			// TODO: not always this error
+			http.Error(w, "content uploaded is too large", http.StatusBadRequest)
+			return
+		}
+
+		// Only when not all contents have been deleted
+		if len(work.Contents) != 0 {
+			for k, v := range r.Form {
+				if strings.HasPrefix(k, "text[") {
+					id, err := uuid.Parse(k[5:41])
+					if err != nil {
+						panic("unexpected error parsing id for text")
+					}
+
+					text := getText(id)
+					text.Text = v[0]
+
+					work.Contents[text.GetVertical()][text.GetHorizontal()] = text
+					work.Save()
 				}
 
-				text := getText(id)
-				text.Text = v[0]
+				if strings.HasPrefix(k, "caption[") {
+					id, err := uuid.Parse(k[8:44])
+					if err != nil {
+						panic("unexpected error parsing id for content")
+					}
 
-				work.Contents[text.GetVertical()][text.GetHorizontal()] = text
-				work.Save()
-			}
+					media := getMedia(id)
+					media.SetCaption(&Caption{v[0]})
+					work.Contents[media.GetPosition().Vertical][media.GetPosition().Horizontal] = media
 
-			if strings.HasPrefix(k, "caption[") {
-				id, err := uuid.Parse(k[8:44])
-				if err != nil {
-					panic("unexpected error parsing id for content")
+					work.Save()
 				}
-
-				media := getMedia(id)
-				media.SetCaption(&Caption{v[0]})
-				work.Contents[media.GetPosition().Vertical][media.GetPosition().Horizontal] = media
-
-				work.Save()
 			}
 		}
-	}
 
-	title := r.Form["title-text"]
-	work.Title = title[0]
+		title := r.Form["title-text"]
+		work.Title = title[0]
+	}
 }
 
 func (work *Work) HandleCanvasAddText(w http.ResponseWriter, r *http.Request) {
@@ -647,6 +681,47 @@ func (work *Work) HandleCanvasDeleteHorizontal(w http.ResponseWriter, r *http.Re
 	id := uuid.MustParse(actionValue)
 	content := getContent(id)
 	work.RemoveContent(content)
+
+}
+
+func (w *Work) ToHtml() template.HTML {
+	templ := template.Must(template.ParseFiles(w.getWorkTemplatePath(false)))
+	var buf bytes.Buffer
+	if err := templ.Execute(&buf, w); err != nil {
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", "work"))
+	}
+
+	return template.HTML(buf.String())
+}
+
+func (w *Work) ToEditableHtml() template.HTML {
+	name := w.getWorkTemplateName(true)
+	path := w.getWorkTemplatePath(true)
+	templ := template.Must(template.New(strings.TrimPrefix(name, "editable/") + ".html").Funcs(template.FuncMap{
+		"add": func(a, b int) int { return a + b },
+	}).ParseFiles(path))
+
+	var buf bytes.Buffer
+	if err := templ.Execute(&buf, w); err != nil {
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", "work"))
+	}
+
+	return template.HTML(buf.String())
+}
+
+// GetName(
+func (w *Work) getWorkTemplateName(editable bool) string {
+	name := "work"
+	if editable {
+		name = "editable/work"
+	}
+
+	return name
+}
+
+// GetPath(
+func (w *Work) getWorkTemplatePath(editable bool) string {
+	return fmt.Sprintf("./resources/templates/listings/%s.html", w.getWorkTemplateName(editable))
 }
 
 func (w *Work) reindexRow(vert int) {
@@ -1760,10 +1835,24 @@ func mustCombineNumbers(numbers []int) int {
 //
 // \/\/\/\/\/\/\/\/\/\/\/\/\/\/
 
+// Case 1 (localhost):
+// request made to localhost -> Nginx proxies to localhost:8080 with X-Suffix-Subdomain = "" -> localhost:8080 redirects to localhost:8080/works
+
+// Case 2 (localhost/resource):
+// redirect request made to localhost/works -> Nginx proxies to localhost:8080 with X-Suffix-Subdomain = "works"
+// -> Go subdomainPeriodReplacer redirects to works.at.localhost -> Nginx proxies to localhost:8080 with X-Prefix-Subdomain = "works.at"
+// -> Go subdomainPeriodReplacer handles and responds to request to works.at.localhost by replacing the request url with localhost/works internally
+
+// Case 3 (subdomain.localhost/resource):
+// request made to works.at.localhost/work/2760 -> Nginx proxies to localhost:8080 with X-Prefix-Subdomain = "works.at" and X-Suffix-Subdomain = "work/2760"
+// -> Go subdomainPeriodReplacer redirects to work.2760.at.localhost -> Nginx proxies to localhost:8080 with X-Prefix-Subdomain = "work.2760.at"
+// -> Go subdomainPeriodReplacer handles and responds to request made to work.2760.at.localhost by replacing the request url with localhost/work/2760 internally
 func subdomainPeriodReplacer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		suffixSubdomain := r.Header.Get("X-Suffix-Subdomain")
 		prefixSubdomain := r.Header.Get("X-Prefix-Subdomain")
+		log.Printf("suffix: %s, prefix: %s", suffixSubdomain, prefixSubdomain)
+		log.Println("path: " + r.URL.Path)
 
 		if suffixSubdomain != "" {
 			subdomain := strings.ReplaceAll(suffixSubdomain, "/", ".")
@@ -1907,7 +1996,11 @@ func createWorkPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch action {
 	case "view-work":
-		work.HandleCanvasSaveView(w, r)
+		work.HandleCanvasGetView(w, r)
+		return
+	case "edit-work":
+		work.HandleCanvasGetEditable(w, r)
+		return
 	case "add-text":
 		work.HandleCanvasAddText(w, r)
 	case "add-media":
@@ -1947,13 +2040,18 @@ func organizeWorksHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	mux := http.NewServeMux()
 
+	// TODO: using mux to handle means .jpg, . will get replaced with / from subdomainPeriodReplacer
 	for _, mt := range AllMediaTypes {
 		mediaDir := "." + mt.mediaDir() // ./{resourcefolder}/{media}/{contentType (plural)}/
 		urlPrefix := mt.urlPrefix()     // /{contentType (singular)}/{with}/{name}/{fileName}/
+		log.Printf("mediaDir: %s, urlPrefix: %s", mediaDir, urlPrefix)
 
 		contentTypeFileServer := http.FileServer(http.Dir(mediaDir))
 		mux.Handle(urlPrefix, http.StripPrefix(urlPrefix, contentTypeFileServer))
 	}
+
+	cssFileServer := http.FileServer(http.Dir("./resources/static/"))
+	mux.Handle("/static/", http.StripPrefix("/static/", cssFileServer))
 
 	mux.HandleFunc("/{$}", homeHandler)
 	mux.HandleFunc("/works", viewWorksHandler)
@@ -1967,5 +2065,6 @@ func main() {
 	mux.HandleFunc("/compose/work/{numbering}", createWorkHandler)
 
 	mux.HandleFunc("/organize/works/by/{name}", organizeWorksHandler)
+
 	log.Fatal(http.ListenAndServe(":8080", subdomainPeriodReplacer(mux)))
 }

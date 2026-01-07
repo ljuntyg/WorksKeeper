@@ -1,58 +1,64 @@
 <html>
+  <head>
+    <link rel="stylesheet" href="/static/home.css">
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+
   <body>
 
     <!-- *ListingsAddedN is passed in -->
-
-    <a href="/compose/work">create</a>
-
     
-    <form method="post">
+    <form method="post" class="main-container">
 
-      <table>
-        <tr style="text-align: left">
-          <th>length</th>
-          <th>title</th>
-          <th>about</th>
-        </tr>
+      <nav class="nav-container">
+        <a href="/compose/work">create</a>
+      </nav>
 
-        {{ range .Listings }}
-        {{ $numberingString := .GetNumberingUrlString }}
-        <tr>
-          <td>
-            {{ formatTime .GetTimeRequiredMinutes }}
-          </td>
-          <td>
-            <a href="{{ $numberingString }}">{{ .GetTitle }}</a>
-          </td>
-          <td>
-            <details>
-              <summary></summary>
-              TODO: Description/Summary
-              TODO: Remember if open/closed on post
-            </details>
-          </td>
+      <main class="table-container">
+        <table>
+          <tr>
+            <th>length</th>
+            <th>title</th>
+            <!-- <th>about</th> -->
+          </tr>
+  
+          {{ range .Listings }}
+          {{ $numberingString := .GetNumberingUrlString }}
+          <tr>
+            <td>
+              {{ formatTime .GetTimeRequiredMinutes }}
+            </td>
+            <td>
+              <a href="{{ $numberingString }}">{{ .GetTitle }}</a>
+            </td>
+            <!-- <td>
+              <details>
+                <summary></summary>
+                TODO: Description/Summary
+                TODO: Remember if open/closed on post
+              </details>
+            </td> -->
+  
+            <input type="hidden" name="listing-numberings" value="{{ $numberingString }}">
+          </tr>
+          {{ end }}
+        </table>
+      </main>
 
-          <input type="hidden" name="listing-numberings" value="{{ $numberingString }}">
-        </tr>
-        {{ end }}
-      </table>
 
-      {{ if and (lt (len .Listings) 15) (eq .HasMore true) }}
-      <menu>
-        <li>
-          <button type="submit" name="action" value="more-works:">
-            & more
-          </button>
-        </li>
-      </menu>
-      {{ else }}
-        {{ if eq .HasMore true }}
-        <a href="/search/works">search</a>
+      <section class="options-container">
+        {{ if and (lt (len .Listings) 15) (eq .HasMore true) }}
+        <button type="submit" name="action" value="more-works:">
+          & more
+        </button>
         {{ else }}
-        that's all, for now
+          {{ if eq .HasMore true }}
+          <a href="/search/works">search</a>
+          {{ else }}
+          that's all, for now
+          {{ end }}
         {{ end }}
-      {{ end }}
-
+      </section>
     </form>
     
     

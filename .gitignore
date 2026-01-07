@@ -35,3 +35,4 @@ go.work.sum
 resources/media/*/*
 notes.md
 nginx.conf
+resources/test.html
