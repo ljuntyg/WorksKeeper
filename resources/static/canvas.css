@@ -12,10 +12,6 @@
     align-items: center;
 }
 
-figure {
-    margin: 0;
-}
-
 video, img, audio {
     max-height: 80vh;
     max-width: 100%;

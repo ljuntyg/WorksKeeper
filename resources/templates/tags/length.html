@@ -1,18 +1,12 @@
 <select name="mode-modifier">
 	{{ range .GetPossibleModeModifiers}}
-	<option value="{{ . }}"
-		{{ if eq . $.FilterMode }}selected{{ end }}>
-		{{ . }}
-	</option>
+	<option value="{{ . }}"{{ if eq . $.FilterMode }} selected{{ end }}>{{ . }}</option>
 	{{ end }}
 </select>
 
 <select name="filter-mode">
 	{{ range .GetPossibleFilterModes }}
-	<option value="{{ . }}"
-		{{ if eq . $.FilterMode }}selected{{ end }}>
-		{{ . }}
-	</option>
+	<option value="{{ . }}"{{ if eq . $.FilterMode }} selected{{ end }}>{{ . }}</option>
 	{{ end }}
 </select>
 

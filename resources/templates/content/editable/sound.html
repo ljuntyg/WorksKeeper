@@ -1,7 +1,7 @@
 <figure>
-	<audio controls>
+	<audio controls loop>
 		{{ range .GetSources }}
-		<source src={{ . }}>
+		<source src="{{ . }}">
 		{{ end }}
 		Your browser doesn't support this audio.
 	</audio>

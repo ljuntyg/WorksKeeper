@@ -5,6 +5,17 @@ button {
     cursor: pointer;
 }
 
+p {
+    white-space: pre-wrap;
+    text-align: justify;
+    text-justify: auto;
+    line-height: 1.5;
+}
+
+figure {
+    margin: 0;
+}
+
 table th {
     display: none;
 }

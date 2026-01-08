@@ -18,7 +18,10 @@ video, img, audio {
     object-fit: scale-down;
 }
 
+/* TODO: use grid with 1fr instead of flex .contents-container for text specifically */
 p {
+    display: block;
     margin-left: 2rem;
     margin-right: 2rem;
+    align-self: flex-start;
 }

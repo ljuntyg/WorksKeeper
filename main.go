@@ -910,7 +910,7 @@ func (t *Text) GetWork() *Work {
 }
 
 func (t *Text) ToHtml() template.HTML {
-	return contentableToHtmlTemplate(t, false)
+	return textToHtmlTemplate(t)
 }
 
 func (t *Text) GetName(prefix string) string {
@@ -1278,6 +1278,21 @@ func getContentTemplatePath(c Contentable, editable bool) string {
 	}
 
 	return fmt.Sprintf("./resources/templates/content/%s.html", c.GetName(editablePrefix))
+}
+
+func textToHtmlTemplate(t *Text) template.HTML {
+	// With textarea default wrap="soft", any line breaks are a CR+LF pair (\r\n)
+	// Replace each pair with a <br> in template
+	/* pParts := strings.SplitSeq(t.Text, "\r\n") */
+	// But using css: p { white-space: pre-wrap; } to draw newlines and spaces is easier
+
+	templ := template.Must(template.ParseFiles(t.GetPath("")))
+	var buf bytes.Buffer
+	if err := templ.Execute(&buf, t); err != nil {
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", t.GetName("")))
+	}
+
+	return template.HTML(buf.String())
 }
 
 func contentableToHtmlTemplate(c Contentable, editable bool) template.HTML {

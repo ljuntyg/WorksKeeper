@@ -1,12 +1,10 @@
-<h1 class="title">
-  {{ .GetTitle }}
-</h1>
+<h1 class="title">{{ .GetTitle }}</h1>
 
 {{ range .Contents }}
 <section class="row-container">
   <section class="contents-container">
   {{ range . }}
-    {{ .ToHtml }}
+  {{ .ToHtml }}
   {{ end }}
   </section>
 </section>

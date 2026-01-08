@@ -133,7 +133,7 @@ func initMockTagValues() []*TagValues {
 			tv = &TagValues{
 				Name:                  tag.Name,
 				PossibleValues:        []string{},
-				PossibleModeModifiers: []string{"being", "not being"},
+				PossibleModeModifiers: []string{"being", "not"},
 				PossibleFilterModes:   filterModes,
 			}
 			tagValuesMap[tag.Name] = tv
