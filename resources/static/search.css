@@ -1,3 +1,29 @@
-main {
-    grid-column: 3 / 4;
+.main-container {
+    width: 100vw;
+    display: grid;
+    grid-template-columns: 1fr 1fr max-content 2fr;
+    grid-auto-rows: 2rem auto auto auto;
+    grid-template-areas:
+        ". . . ."
+        "search . table ."
+        "search options . ."
+        "search . . .";
+}
+
+.search-container {
+    grid-area: search;
+}
+
+.table-container {
+    grid-area: table;
+}
+
+.options-container {
+    grid-area: options;
+    justify-self: end;
+}
+
+.nav-container {
+    grid-area: nav;
+    justify-self: end;
 }

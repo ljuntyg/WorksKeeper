@@ -8,87 +8,91 @@
     
     <!-- *Filter is passed in as Data -->
     
-    <form method="post" class="aside-with-main-search">
-      <aside>
-        <fieldset>
-      
-          <menu>
-            <li>
-              <select name="filter-tag">
-                {{ range .Environment.AllTags }}
-                <option value="{{ .Name }}"{{ if eq .Name $.Data.PreviousTag }} selected{{ end }}>{{ .Name }}</option>
-                {{ end }}
-              </select>
-      
-              <button type="submit" name="action" value="add-filter:">
-                & new filter
-              </button>
-            </li>
-          </menu>
-      
-          {{ with .Data.FilterGroups }}
-          <ul>
-            <!-- list already added filters -->
-            {{ $globalIdx := 0 }}
-            {{ range $name, $tags := . }}
-            <li>
-              <fieldset>
-      
-                <legend>{{ $name }}</legend>
-                
-                {{ range $tags }}
-                <li>
-                  <button type="submit" name="action" value="remove-filter:{{ $globalIdx }}">
-                    ✕
-                  </button>
+    <form method="post">
+      <div class="main-container">
+    
+        <main class="table-container">
+          <table>
+            <tr>
+              <th>length</th>
+              <th>title</th>
+            </tr>
+    
+            {{ range .Data.Listables }}
+            {{ $numberingString := .GetNumberingUrlString }}
+            <tr>
+              <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
+              <td>
+                <a href="{{ $numberingString }}">{{ .GetTitle }}</a>
+              </td>
+    
+              <input type="hidden" name="listing-numberings" value="{{ $numberingString }}">
+            </tr>
+            {{ end }}
+          </table>
+        </main>
 
-                  {{ .ToHtml }}
-      
-                  {{ $globalIdx = add $globalIdx 1 }}
+        <search class="search-container">  
+          <aside>
+            <fieldset>
+          
+              <menu>
+                <li>
+                  <select name="filter-tag">
+                    {{ range .Environment.AllTags }}
+                    <option value="{{ .Name }}"{{ if eq .Name $.Data.PreviousTag }} selected{{ end }}>{{ .Name }}</option>
+                    {{ end }}
+                  </select>
+                  
+                  <button type="submit" name="action" value="add-filter:">
+                    & new filter
+                  </button>
+                </li>
+              </menu>
+          
+              {{ with .Data.FilterGroups }}
+              <ul>
+                <!-- list already added filters -->
+                {{ $globalIdx := 0 }}
+                {{ range $name, $tags := . }}
+                <li>
+                  <fieldset>
+          
+                    <legend>{{ $name }}</legend>
+                    
+                    {{ range $tags }}
+                    <li>
+                      <button type="submit" name="action" value="remove-filter:{{ $globalIdx }}">
+                        ✕
+                      </button>
+    
+                      {{ .ToHtml }}
+          
+                      {{ $globalIdx = add $globalIdx 1 }}
+                    </li>
+                    {{ end }}
+          
+                  </fieldset>
                 </li>
                 {{ end }}
-      
-              </fieldset>
-            </li>
-            {{ end }}
-          </ul>
-          {{ end }}
-      
-          <button type="submit" name="action" value="search:">
-            search works
+              </ul>
+              {{ end }}
+          
+              <button type="submit" name="action" value="search:">
+                search works
+              </button>
+          
+            </fieldset>
+          </aside>
+        </search>
+        
+        <section class="options-container">
+          <button type="submit" name="action" value="more-works:">
+            & more
           </button>
-      
-        </fieldset>
-      </aside>
+        </section>
 
-      <main>
-        <table>
-          <tr>
-            <th>length</th>
-            <th>title</th>
-          </tr>
-  
-          {{ range .Data.Listables }}
-          {{ $numberingString := .GetNumberingUrlString }}
-          <tr>
-            <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
-            <td>
-              <a href="{{ $numberingString }}">{{ .GetTitle }}</a>
-            </td>
-  
-            <input type="hidden" name="listing-numberings" value="{{ $numberingString }}">
-          </tr>
-          {{ end }}
-        </table>
-  
-        <menu>
-          <li>
-            <button type="submit" name="action" value="more-works:">
-              TODO: & more
-            </button>
-          </li>
-        </menu>
-      </main>
+      </div>
     </form>
       
     <script>

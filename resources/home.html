@@ -6,57 +6,60 @@
 
   <body>
 
-    <!-- *ListingsAddedN is passed in -->
+    <!-- *ListingsHasMore is passed in -->
     
-    <form method="post" class="main-container">
+    <form method="post">
+      <div class="main-container">
 
-      <nav class="nav-container">
-        <a href="/compose/work">create</a>
-      </nav>
-
-      <main class="table-container">
-        <table>
-          <tr>
-            <th>length</th>
-            <th>title</th>
-            <!-- <th>about</th> -->
-          </tr>
+        <nav class="nav-container">
+          <a href="/compose/work">create</a>
+        </nav>
   
-          {{ range .Listings }}
-          {{ $numberingString := .GetNumberingUrlString }}
-          <tr>
-            <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
-            <td>
-              <a href="{{ $numberingString }}">{{ .GetTitle }}</a>
-            </td>
-            <!-- <td>
-              <details>
-                <summary></summary>
-                TODO: Description/Summary
-                TODO: Remember if open/closed on post
-              </details>
-            </td> -->
+        <main class="table-container">
+          <table>
+            <tr>
+              <th>length</th>
+              <th>title</th>
+              <!-- <th>about</th> -->
+            </tr>
+    
+            {{ range .Listings }}
+            {{ $numberingString := .GetNumberingUrlString }}
+            <tr>
+              <td>{{ formatTime .GetTimeRequiredMinutes }}</td>
+              <td>
+                <a href="{{ $numberingString }}">{{ .GetTitle }}</a>
+              </td>
+              <!-- <td>
+                <details>
+                  <summary></summary>
+                  TODO: Description/Summary
+                  TODO: Remember if open/closed on post
+                </details>
+              </td> -->
+    
+              <input type="hidden" name="listing-numberings" value="{{ $numberingString }}">
+            </tr>
+            {{ end }}
+          </table>
+        </main>
   
-            <input type="hidden" name="listing-numberings" value="{{ $numberingString }}">
-          </tr>
+  
+        <section class="options-container">
+          {{ if and (lt (len .Listings) 15) (eq .HasMore true) }}
+          <button type="submit" name="action" value="more-works:">
+            & more
+          </button>
+          {{ else }}
+          {{ if eq .HasMore true }}
+          <a href="/search/works">search</a>
+          {{ else }}
+          that's all, for now
           {{ end }}
-        </table>
-      </main>
+          {{ end }}
+        </section>
 
-
-      <section class="options-container">
-        {{ if and (lt (len .Listings) 15) (eq .HasMore true) }}
-        <button type="submit" name="action" value="more-works:">
-          & more
-        </button>
-        {{ else }}
-        {{ if eq .HasMore true }}
-        <a href="/search/works">search</a>
-        {{ else }}
-        that's all, for now
-        {{ end }}
-        {{ end }}
-      </section>
+      </div>
     </form>
     
     

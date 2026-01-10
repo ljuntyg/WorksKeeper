@@ -1,34 +1,25 @@
 .main-container {
     width: 100vw;
     display: grid;
-    grid-template-columns: 4fr 1fr 1fr 4fr;
+    grid-template-columns: 1fr max-content 1fr;
+    grid-template-rows: 2rem auto auto;
+    grid-template-areas: 
+        "nav . ."
+        ". table ."
+        "options . .";
 }
 
 .nav-container {
-    grid-column: 2 / 3;
+    justify-self: end;
+    align-self: end;
+    grid-area: nav;
 }
 
 .table-container {
-    grid-column: 3 / 4;
+    grid-area: table;
 }
 
 .options-container {
-    grid-column: 2 / 3;
-}
-
-/* table {
-    grid-column: 3 / 4;
-    margin-left: auto;
-    margin-right: auto;
-} */
-
-button {
-    background: none;
-    border: none;
-    text-decoration: underline;
-    cursor: pointer;
-}
-
-table th {
-    display: none;
+    grid-area: options;
+    justify-self: end;
 }
