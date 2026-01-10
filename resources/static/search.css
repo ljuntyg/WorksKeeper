@@ -1,17 +1,18 @@
 .main-container {
     width: 100vw;
     display: grid;
-    grid-template-columns: 1fr 1fr max-content 2fr;
-    grid-auto-rows: 2rem auto auto auto;
+    grid-template-columns: 2fr 1fr max-content 3fr;
+    grid-template-rows: 2rem auto auto auto;
     grid-template-areas:
-        ". . . ."
-        "search . table ."
-        "search options . ."
-        "search . . .";
+        ".      .       .       ."
+        "search .       table   ."
+        "search options .       ."
+        "search .       .       .";
 }
 
 .search-container {
     grid-area: search;
+    width: max-content;
 }
 
 .table-container {

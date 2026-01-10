@@ -11,47 +11,49 @@
     
     <form method="post" enctype="multipart/form-data" class="aside-with-main-canvas">
       
-      <aside>
-        <fieldset>
-          
-          {{ if eq $.Editing true }}
-          <menu>
-            <li>
-              <button type="submit" name="action" value="add-text:{{ .Work.GetId }}">
-                & new text
-              </button>
-            </li>
+      <div class="main-container">
+        <aside class="tools-container">
+          <fieldset>
             
-            <li>
-              <button type="submit" name="action" value="add-media:{{ .Work.GetId }}">
-                & new media
-              </button>
-            </li>
-          </menu>
-
-          <button type="submit" name="action" value="view-work:">
-            view work
-          </button>
-
-          <input type="hidden" name="editing" value="true">
+            {{ if eq $.Editing true }}
+            <button type="submit" name="action" value="view-work:">
+              view work
+            </button>
+  
+            <menu>
+              <li>
+                <button type="submit" name="action" value="add-text:{{ .Work.GetId }}">
+                  & new text
+                </button>
+              </li>
+              
+              <li>
+                <button type="submit" name="action" value="add-media:{{ .Work.GetId }}">
+                  & new media
+                </button>
+              </li>
+            </menu>
+  
+            <input type="hidden" name="editing" value="true">
+            {{ else }}
+            <button type="submit" name="action" value="edit-work:">
+              compose work
+            </button>
+  
+            <input type="hidden" name="editing" value="false">
+            {{ end }}
+  
+          </fieldset>
+        </aside>
+  
+        <main class="canvas-container">
+          {{ if eq $.Editing true }}
+          {{ .Work.ToEditableHtml }}
           {{ else }}
-          <button type="submit" name="action" value="edit-work:">
-            compose work
-          </button>
-
-          <input type="hidden" name="editing" value="false">
+          {{ .Work.ToHtml }}
           {{ end }}
-
-        </fieldset>
-      </aside>
-
-      <main>
-        {{ if eq $.Editing true }}
-        {{ .Work.ToEditableHtml }}
-        {{ else }}
-        {{ .Work.ToHtml }}
-        {{ end }}
-      </main>
+        </main>
+      </div>
   
     </form>
 

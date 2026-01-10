@@ -1,3 +1,22 @@
+.main-container {
+    width: 100vw;
+    display: grid;
+    grid-template-columns: 1fr 80vw 1fr;
+    grid-template-rows: 2rem auto;
+    grid-template-areas:
+        ".      .       ."
+        "tools  canvas  .";
+}
+
+.tools-container {
+    grid-area: tools;
+    width: max-content;
+}
+
+.canvas-container {
+    grid-area: canvas
+}
+
 .title {
     text-align: center;
 }

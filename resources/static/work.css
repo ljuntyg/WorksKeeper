@@ -3,6 +3,29 @@
 }
 
 .row-container {
+    max-height: 80vh; /* The actual max-height is this value or the height of the smallest figure */
+    height: 100%;
+    display: flex;
+}
+
+.contents-container {
+    display: flex;
+    align-items: start;
+    justify-content: center;
+}
+
+.contents-container > figure {
+    height: 100%;
+    margin: 0;
+}
+
+video, img, audio {
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: scale-down;
+} 
+
+/* .row-container {
     display: flex;
     justify-content: center;
 }
@@ -16,9 +39,9 @@ video, img, audio {
     max-height: 80vh;
     max-width: 100%;
     object-fit: scale-down;
-}
+} */
 
-/* TODO: use grid with 1fr instead of flex .contents-container for text specifically */
+/* TODO?: use grid with 1fr instead of flex .contents-container for text specifically */
 p {
     display: block;
     margin-left: 2rem;

@@ -20,38 +20,15 @@ table th {
     display: none;
 }
 
+menu, ul {
+    padding-left: 1rem;
+}
+
 li {
     list-style-type: none;
 }
 
 .datalist-input {
     width: 10rem;
-}
-
-/* TODO: this conflicts with other rules? */
-/* aside {
-    position: fixed;
-    top: -1;
-    left: -1;
-    z-index: 100;
-    background: white;
-} */
-
-.aside-with-main-canvas {
-    display: grid;
-    grid-template-columns: max-content 7fr 1fr;
-}
-
-.aside-with-main-search {
-    display: grid;
-    grid-template-columns: 4fr 1fr 1fr 4fr;
-}
-
-.aside-with-main-search aside,
-.aside-with-main-canvas aside {
-    position: sticky;
-    align-self: start;
-    width: max-content;
-    top: 0;
 }
 
