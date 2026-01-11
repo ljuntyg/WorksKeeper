@@ -92,8 +92,8 @@ var currentFilter = 0
 var maxNestedSeries = 2
 var maxWorkContents = 10
 var maxSeriesListings = 2
-var maxWorks = 2
-var maxSeries = 2
+var maxWorks = 80
+var maxSeries = 5
 
 func init() {
 	log.Println("calling MOCK init()")
@@ -520,7 +520,8 @@ func getMockNumbering(typeCounter *int, typeString string) Numbering {
 func getMockFilter() *Filter {
 	log.Println("calling MOCK getMockFilter()")
 
-	listings, _ := getNListings(10)
+	//listings, _ := getNListings(10)
+	listings := getAllListings()
 
 	return &Filter{
 		Listables:    listings,

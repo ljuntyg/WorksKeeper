@@ -14,11 +14,12 @@ figure {
 }
 
 .text-gallery-container {
-    margin-left: 4rem;
-    margin-right: 4rem;
+    margin-left: 3rem;
+    margin-right: 3rem;
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: 1fr;
+    gap: 2rem;
     justify-items: center;
 }
 

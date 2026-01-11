@@ -2,12 +2,15 @@
     display: grid;
     grid-template-columns: 1fr 80vw 1fr;
     grid-template-rows: 2rem auto;
+    align-items: start;
     grid-template-areas:
         ".      .       ."
         "tools  canvas  .";
 }
 
 .tools-container {
+    top: 0;
+    position: sticky;
     grid-area: tools;
     width: max-content;
 }
@@ -44,4 +47,5 @@
     max-height: 80vh;
     max-width: 100%;
     object-fit: scale-down;
+    text-align: center;
 } 
