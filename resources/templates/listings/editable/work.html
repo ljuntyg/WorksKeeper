@@ -36,12 +36,12 @@
   <textarea name="title-text">{{ .GetTitle }}</textarea>
 </h1>
 
-{{ $nbrRows := len .Contents }}
-{{ with .Contents }}
+{{ $nbrRows := len .ContentRows }}
+{{ with .ContentRows }}
 {{ range . }}
-<!-- . = GroupedContent -->
-{{ if ne 0 (.GetLength) }}
-{{ $first := index .GetContents 0 }}
+<!-- . is ContentRow -->
+{{ if ne 0 (len (.GetContentGroups)) }}
+{{ $first := (index (.Members) 0).Content }}
 <fieldset>
   
   <legend>
@@ -62,7 +62,9 @@
     {{ end }}
   </legend>
 
+  {{ range .GetContentGroups }}
   {{ .ToEditableHtml }}
+  {{ end }}
 
   <menu>
     <li>

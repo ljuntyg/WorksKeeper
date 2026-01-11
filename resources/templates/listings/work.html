@@ -31,8 +31,16 @@
   }
 </script>
 
-<h1 class="title">{{ .GetTitle }}</h1>
-
-{{ range .Contents }}
-{{ .ToHtml }}
-{{ end }}
+<article class="main-container">
+  <div class="title-container">
+    <h1 class="title">{{ .GetTitle }}</h1>
+  </div>
+  
+  <section class="body-container">
+    {{ range .ContentRows }}
+    {{ range .GetContentGroups }}
+    {{ .ToHtml }}
+    {{ end }}
+    {{ end }}
+  </section>
+</article>

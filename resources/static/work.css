@@ -1,5 +1,19 @@
-.title {
-    text-align: center;
+.main-container {
+    display: grid;
+    grid-template-columns: 1fr 80vw 1fr;
+    grid-template-rows: auto auto;
+    grid-template-areas:
+        "title  title   title"
+        ".      body    . ";
+}
+
+.title-container {
+    grid-area: title;
+    justify-self: center;
+}
+
+.body-container {
+    grid-area: body;
 }
 
 figure {

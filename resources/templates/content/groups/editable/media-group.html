@@ -1,39 +1,33 @@
-<!-- MediaGroup is passed in -->
+<!-- MembersLengthVertical is passed in -->
+<div class="editable-media-row-container" id="row[{{ .Vertical }}]">
+  <section class="editable-media-gallery-container" id="gallery[{{ .Vertical }}]">
 
-<div class="editable-media-row-container" id="row[{{ .GetIndex }}]">
-  <section class="editable-media-gallery-container" id="gallery[{{ .GetIndex }}]">
-
-    <!-- List of row items -->
-    {{ $rowLen := .GetLength }}
-    {{ range .Media }}
+    {{ $rowLen := .Length }}
+    {{ range .Members }}
     <fieldset>
       {{ if ne 1 $rowLen }}
       <legend>
-        <button type="submit" name="action" value="delete-horizontal:{{ .GetId }}">
+        <button type="submit" name="action" value="delete-horizontal:{{ .Content.GetId }}">
           ✕
         </button>
 
-        {{ if ne .GetHorizontal 0 }}
-        <button type="submit" name="action" value="horizontal-left:{{ .GetId }}">
+        {{ if ne .Content.GetHorizontal 0 }}
+        <button type="submit" name="action" value="horizontal-left:{{ .Content.GetId }}">
           ←
         </button>
         {{ end }}
 
-        {{ if ne (add .GetHorizontal 1) $rowLen }}
-        <button type="submit" name="action" value="horizontal-right:{{ .GetId }}">
+        {{ if ne (add .Content.GetHorizontal 1) $rowLen }}
+        <button type="submit" name="action" value="horizontal-right:{{ .Content.GetId }}">
           →
         </button>
         {{ end }}
       </legend>
       {{ end }}
 
-      {{ .ToEditableHtml }}
+      {{ .Content.ToEditableHtml }}
     </fieldset>
     {{ end }}
 
   </section>
-
-  <script>
-    initEditingGallery({{ $.GetIndex }})
-  </script>
 </div>

@@ -44,10 +44,16 @@ type Saveable interface {
 	Save()
 }
 
+// Series -> Work -> Contents
+type Lengthable interface {
+	GetLength() int
+}
+
 // Make Templatable and Editable
 type Listable interface {
 	Numberable
 	Saveable
+	Lengthable
 	GetId() uuid.UUID
 	GetParentListing() Listable
 	GetTitle() string
@@ -69,13 +75,14 @@ type Series struct {
 
 type Matrixable interface {
 	AddContent(c Contentable)
-	AddHorizontal(c Contentable, vert int)
+	AddRowContent(vert int, c Contentable)
 	RemoveContent(c Contentable)
 	RemoveRow(vert int)
-	MoveUp(c Contentable)
-	MoveDown(c Contentable)
-	MoveLeft(c Contentable)
-	MoveRight(c Contentable)
+	RemoveInRow(vert int, hor int)
+	MoveRowUp(vert int)
+	MoveRowDown(vert int)
+	MoveContentLeft(c Contentable)
+	MoveContentRight(c Contentable)
 }
 
 type HandlerCanvasable interface {
@@ -123,16 +130,30 @@ type Editable interface {
 	ToEditableHtml() template.HTML
 }
 
+// Contents referred to by indices are never empty or nil, the type of first Contentable in the Row defines the type of the ContentGroup
+type ContentGroup struct {
+	Row        *ContentRow
+	Start, End int // Row[Start:End] -> [Start, End) on Row
+}
+
+type GroupedContent struct {
+	Content Contentable
+	Group   *ContentGroup
+}
+
+// A ContentRow must have at least one member to be valid, the vertical of the first content defines the vertical of the row
+type ContentRow struct {
+	Members []*GroupedContent
+}
+
 type Work struct {
 	Id           uuid.UUID
 	Numbering    Numbering
 	ParentSeries *Series
 	Title        string
-	Length       int
 	IsPublic     bool
-	// Contents     [][]Contentable // [Vertical][Horizontal]
-	Contents []GroupedContent
-	Tags     []*Tag
+	ContentRows  []*ContentRow
+	Tags         []*Tag
 }
 
 type HandlerSearchable interface {
@@ -161,12 +182,9 @@ type Verticable interface {
 type Positionable interface {
 	Verticable
 	GetHorizontal() int
+	SetHorizontal(horizontal int)
 	GetPosition() Position
 	SetPosition(vertical int, horizontal int)
-}
-
-type Groupable interface {
-	ToNewGroup() GroupedContent
 }
 
 type Contentable interface {
@@ -174,13 +192,12 @@ type Contentable interface {
 	Editable
 	Positionable
 	Saveable
-	Groupable
 	GetId() uuid.UUID
 	GetWork() *Work
 }
 
 type Position struct {
-	Vertical   int
+	Vertical   int // 0-indexed, 0 is the highest vertical position
 	Horizontal int
 }
 
@@ -209,18 +226,18 @@ type Mediable interface {
 	SetSources(sources []string)
 }
 
-type EmptyMedia struct {
-	Id       uuid.UUID
-	Work     *Work
-	Position Position
-}
-
 type Sound struct {
 	Id       uuid.UUID
 	Work     *Work
 	Sources  []string
 	Position Position
 	Caption  *Caption
+}
+
+type EmptyMedia struct {
+	Id       uuid.UUID
+	Work     *Work
+	Position Position
 }
 
 type Video struct {
@@ -315,6 +332,11 @@ func (s *Series) Save() {
 	getMockDb().SaveSeries(s)
 }
 
+// TODO:
+func (s *Series) GetLength() int {
+	return -1
+}
+
 func (w *Work) GetId() uuid.UUID {
 	return w.Id
 }
@@ -331,7 +353,7 @@ func (w *Work) GetTitle() string {
 func (w *Work) GetTimeRequiredMinutes() int {
 	log.Println("calling MOCK GetTimeRequiredMinutes()")
 
-	return w.Length
+	return w.GetLength()
 }
 
 func (w *Work) GetTags() []*Tag {
@@ -359,118 +381,102 @@ func (w *Work) Save() {
 	getMockDb().SaveWork(w)
 }
 
+// TODO:
+func (w *Work) GetLength() int {
+	return -1
+}
+
 func (w *Work) RemoveContent(c Contentable) {
-	// Remove whole row if the only element on the row is removed
-	/* if c.GetHorizontal() == 0 && len(w.Contents[c.GetVertical()]) == 1 */
-	if c.GetHorizontal() == 0 && len(w.Contents[c.GetVertical()].GetContents()) == 1 {
+	if c.GetHorizontal() == 0 && len(w.ContentRows[c.GetVertical()].Members) == 1 {
 		w.RemoveRow(c.GetVertical())
-	} else {
-		pos := c.GetPosition()
-		vert := pos.Vertical
-		hor := pos.Horizontal
-		row := w.Contents[vert].GetContents()
-
-		row = append(row[:hor], row[hor+1:]...)
-
-		for i := hor; i < len(row); i++ {
-			row[i].SetPosition(vert, i)
-		}
-
-		w.Contents[vert].SetContents(row)
-		w.Save()
+	} else { // we need to remove the content and "fill" the gap by slicing
+		w.RemoveInRow(c.GetVertical(), c.GetHorizontal())
 	}
 }
 
 func (w *Work) RemoveRow(vert int) {
-	w.Contents = append(
-		w.Contents[:vert],
-		w.Contents[vert+1:]...,
-	)
+	w.ContentRows = append(w.ContentRows[:vert], w.ContentRows[vert+1:]...)
 
-	for v := vert; v < len(w.Contents); v++ {
-		for _, c := range w.Contents[v].GetContents() {
-			c.SetVertical(v)
-		}
+	// TODO: Only need to update verticals after the row removed
+	for v := vert; v < len(w.ContentRows); v++ {
+		w.ContentRows[v].SetVertical(v) // Update contents
 	}
 
 	w.Save()
 }
 
+func (w *Work) RemoveInRow(vert int, hor int) {
+	w.ContentRows[vert].RemoveContent(hor)
+	w.Save()
+}
+
+// Add a new row to the work
 func (w *Work) AddContent(c Contentable) {
-	vert := len(w.Contents)
-
+	vert := len(w.ContentRows)
 	c.SetVertical(vert)
-	w.Contents = append(w.Contents, c.ToNewGroup())
+	newRow := &ContentRow{}
+	newRow.AddContent(c)
 
+	w.ContentRows = append(w.ContentRows, newRow)
 	w.Save()
 }
 
-func (w *Work) AddHorizontal(c Contentable, vert int) {
-	row := w.Contents[vert].GetContents()
-
-	hor := len(row)
-	c.SetPosition(vert, hor)
-
-	w.Contents[vert].SetContents(append(row, c))
+func (w *Work) AddRowContent(vert int, c Contentable) {
+	w.ContentRows[vert].AddContent(c)
 	w.Save()
 }
 
-func (w *Work) MoveUp(c Contentable) {
-	row := c.GetVertical()
-
-	if row == 0 {
+func (w *Work) MoveRowUp(vert int) {
+	if vert == 0 {
 		return
 	}
 
-	w.Contents[row], w.Contents[row-1] =
-		w.Contents[row-1], w.Contents[row]
+	w.ContentRows[vert].SetVertical(vert - 1)
+	w.ContentRows[vert-1].SetVertical(vert)
 
-	w.reindexRow(row)
-	w.reindexRow(row - 1)
+	w.ContentRows[vert], w.ContentRows[vert-1] =
+		w.ContentRows[vert-1], w.ContentRows[vert]
 
 	w.Save()
 }
 
-func (w *Work) MoveDown(c Contentable) {
-	row := c.GetVertical()
-
-	if row >= len(w.Contents)-1 {
+func (w *Work) MoveRowDown(vert int) {
+	if vert >= len(w.ContentRows)-1 {
 		return
 	}
 
-	w.Contents[row], w.Contents[row+1] =
-		w.Contents[row+1], w.Contents[row]
+	w.ContentRows[vert].SetVertical(vert + 1)
+	w.ContentRows[vert+1].SetVertical(vert)
 
-	w.reindexRow(row)
-	w.reindexRow(row + 1)
-
-	w.Save()
-}
-
-func (w *Work) MoveLeft(c Contentable) {
-	pos := c.GetPosition()
-	v, h := pos.Vertical, pos.Horizontal
-
-	if h <= 0 {
-		return
-	}
-
-	row := w.Contents[v].GetContents()
-	swap(row, h, h-1, v)
+	w.ContentRows[vert], w.ContentRows[vert+1] =
+		w.ContentRows[vert+1], w.ContentRows[vert]
 
 	w.Save()
 }
 
-func (w *Work) MoveRight(c Contentable) {
+func (w *Work) MoveContentLeft(c Contentable) {
 	pos := c.GetPosition()
 	vert, hor := pos.Vertical, pos.Horizontal
 
-	row := w.Contents[vert].GetContents()
-	if hor >= len(row)-1 {
+	if hor <= 0 {
 		return
 	}
 
-	swap(row, hor, hor+1, vert)
+	w.ContentRows[vert].SwapContents(hor, hor-1)
+
+	w.Save()
+}
+
+func (w *Work) MoveContentRight(c Contentable) {
+	pos := c.GetPosition()
+	vert, hor := pos.Vertical, pos.Horizontal
+
+	row := w.ContentRows[vert]
+	if hor >= len(row.Members)-1 {
+		return
+	}
+
+	row.SwapContents(hor, hor+1)
 	w.Save()
 }
 
@@ -529,7 +535,7 @@ func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Reques
 		}
 
 		// Only when not all contents have been deleted
-		if len(work.Contents) != 0 {
+		if len(work.ContentRows) != 0 {
 			for k, v := range r.Form {
 				if strings.HasPrefix(k, "text[") {
 					id, err := uuid.Parse(k[5:41])
@@ -540,8 +546,9 @@ func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Reques
 					text := getText(id)
 					text.Text = v[0]
 
-					// TODO: clean up
-					work.Contents[text.GetVertical()].Set(text, text.GetHorizontal())
+					pos := text.GetPosition()
+					vert, hor := pos.Vertical, pos.Horizontal
+					work.ContentRows[vert].SetContent(hor, text)
 					work.Save()
 				}
 
@@ -554,11 +561,9 @@ func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Reques
 					media := getMedia(id)
 					media.SetCaption(&Caption{v[0]})
 
-					// TODO: clean up
-					contentGroup := work.Contents[media.GetVertical()]
-					contents := contentGroup.GetContents()
-					contents[media.GetHorizontal()] = media
-					contentGroup.SetContents(contents)
+					pos := media.GetPosition()
+					vert, hor := pos.Vertical, pos.Horizontal
+					work.ContentRows[vert].SetContent(hor, media)
 
 					work.Save()
 				}
@@ -588,7 +593,9 @@ func (work *Work) HandleCanvasAddCaption(w http.ResponseWriter, r *http.Request)
 	text := r.FormValue("added-caption")
 	media.SetCaption(&Caption{text})
 
-	work.Contents[media.GetVertical()].Set(media, media.GetHorizontal())
+	pos := media.GetPosition()
+	vert, hor := pos.Vertical, pos.Horizontal
+	work.ContentRows[vert].SetContent(hor, media)
 	work.Save()
 }
 
@@ -606,8 +613,7 @@ func (work *Work) HandleCanvasAddHorizontal(w http.ResponseWriter, r *http.Reque
 		newContent = ContentTextType.CreateNew()
 	}
 
-	work.AddHorizontal(newContent, content.GetVertical())
-	work.Save()
+	work.AddRowContent(content.GetVertical(), newContent)
 }
 
 func (work *Work) HandleCanvasContentUp(w http.ResponseWriter, r *http.Request) {
@@ -615,7 +621,7 @@ func (work *Work) HandleCanvasContentUp(w http.ResponseWriter, r *http.Request) 
 
 	id := uuid.MustParse(actionValue)
 	content := getContent(id)
-	work.MoveUp(content)
+	work.MoveRowUp(content.GetVertical())
 }
 
 func (work *Work) HandleCanvasContentDown(w http.ResponseWriter, r *http.Request) {
@@ -623,7 +629,7 @@ func (work *Work) HandleCanvasContentDown(w http.ResponseWriter, r *http.Request
 
 	id := uuid.MustParse(actionValue)
 	content := getContent(id)
-	work.MoveDown(content)
+	work.MoveRowDown(content.GetVertical())
 }
 
 func (work *Work) HandleCanvasHorizontalRight(w http.ResponseWriter, r *http.Request) {
@@ -631,7 +637,7 @@ func (work *Work) HandleCanvasHorizontalRight(w http.ResponseWriter, r *http.Req
 
 	id := uuid.MustParse(actionValue)
 	content := getContent(id)
-	work.MoveRight(content)
+	work.MoveContentRight(content)
 }
 
 func (work *Work) HandleCanvasHorizontalLeft(w http.ResponseWriter, r *http.Request) {
@@ -639,7 +645,7 @@ func (work *Work) HandleCanvasHorizontalLeft(w http.ResponseWriter, r *http.Requ
 
 	id := uuid.MustParse(actionValue)
 	content := getContent(id)
-	work.MoveLeft(content)
+	work.MoveContentLeft(content)
 }
 
 func (work *Work) HandleCanvasMediaUpload(w http.ResponseWriter, r *http.Request) {
@@ -686,7 +692,9 @@ func (work *Work) HandleCanvasDeleteCaption(w http.ResponseWriter, r *http.Reque
 	media := getMedia(id)
 	media.SetCaption(nil)
 
-	work.Contents[media.GetVertical()].Set(media, media.GetHorizontal())
+	pos := media.GetPosition()
+	vert, hor := pos.Vertical, pos.Horizontal
+	work.ContentRows[vert].SetContent(hor, media)
 	work.Save()
 }
 
@@ -743,11 +751,11 @@ func (w *Work) getWorkTemplatePath(editable bool) string {
 	return ret
 }
 
-func (w *Work) reindexRow(vert int) {
+/* func (w *Work) reindexRow(vert int) {
 	for _, c := range w.Contents[vert].GetContents() {
 		c.SetVertical(vert)
 	}
-}
+} */
 
 func swap(row []Contentable, i, j, v int) {
 	row[i], row[j] = row[j], row[i]
@@ -908,7 +916,7 @@ func handleContentUpload(r *http.Request, work *Work, mediaPos Position) error {
 		return err
 	}
 
-	work.Contents[mediaPos.Vertical].Set(media, mediaPos.Horizontal)
+	work.ContentRows[mediaPos.Vertical].SetContent(mediaPos.Horizontal, media)
 	work.Save()
 
 	return nil
@@ -967,18 +975,16 @@ func (t *Text) GetHorizontal() int {
 	return t.Position.Horizontal
 }
 
+func (t *Text) SetHorizontal(horizontal int) {
+	t.Position.Horizontal = horizontal
+}
+
 func (t *Text) GetPosition() Position {
 	return t.Position
 }
 
 func (t *Text) SetPosition(vertical int, horizontal int) {
 	t.Position.Vertical, t.Position.Horizontal = vertical, horizontal
-}
-
-func (t *Text) ToNewGroup() GroupedContent {
-	return &TextGroup{
-		[]Contentable{t},
-	}
 }
 
 func (m *EmptyMedia) GetId() uuid.UUID {
@@ -1054,18 +1060,16 @@ func (m *EmptyMedia) GetHorizontal() int {
 	return m.Position.Horizontal
 }
 
+func (m *EmptyMedia) SetHorizontal(horizontal int) {
+	m.Position.Horizontal = horizontal
+}
+
 func (m *EmptyMedia) GetPosition() Position {
 	return m.Position
 }
 
 func (m *EmptyMedia) SetPosition(vertical int, horizontal int) {
 	m.Position.Vertical, m.Position.Horizontal = vertical, horizontal
-}
-
-func (m *EmptyMedia) ToNewGroup() GroupedContent {
-	return &MediaGroup{
-		[]Contentable{m},
-	}
 }
 
 func (s *Sound) GetId() uuid.UUID {
@@ -1139,18 +1143,16 @@ func (s *Sound) GetHorizontal() int {
 	return s.Position.Horizontal
 }
 
+func (s *Sound) SetHorizontal(horizontal int) {
+	s.Position.Horizontal = horizontal
+}
+
 func (s *Sound) GetPosition() Position {
 	return s.Position
 }
 
 func (s *Sound) SetPosition(vertical int, horizontal int) {
 	s.Position.Vertical, s.Position.Horizontal = vertical, horizontal
-}
-
-func (s *Sound) ToNewGroup() GroupedContent {
-	return &MediaGroup{
-		[]Contentable{s},
-	}
 }
 
 func (v *Video) GetId() uuid.UUID {
@@ -1223,18 +1225,16 @@ func (v *Video) GetHorizontal() int {
 	return v.Position.Horizontal
 }
 
+func (v *Video) SetHorizontal(horizontal int) {
+	v.Position.Horizontal = horizontal
+}
+
 func (v *Video) GetPosition() Position {
 	return v.Position
 }
 
 func (v *Video) SetPosition(vertical int, horizontal int) {
 	v.Position.Vertical, v.Position.Horizontal = vertical, horizontal
-}
-
-func (v *Video) ToNewGroup() GroupedContent {
-	return &MediaGroup{
-		[]Contentable{v},
-	}
 }
 
 func (i *Image) GetId() uuid.UUID {
@@ -1307,18 +1307,16 @@ func (i *Image) GetHorizontal() int {
 	return i.Position.Horizontal
 }
 
+func (i *Image) SetHorizontal(horizontal int) {
+	i.Position.Horizontal = horizontal
+}
+
 func (i *Image) GetPosition() Position {
 	return i.Position
 }
 
 func (i *Image) SetPosition(vertical int, horizontal int) {
 	i.Position.Vertical, i.Position.Horizontal = vertical, horizontal
-}
-
-func (i *Image) ToNewGroup() GroupedContent {
-	return &MediaGroup{
-		[]Contentable{i},
-	}
 }
 
 func getContentTemplatePath(c Contentable, editable bool) string {
@@ -1385,149 +1383,286 @@ func mediaToCaptionHtml(m Mediable, editable bool) template.HTML {
 	return template.HTML(buf.String())
 }
 
-// ----------------------------------------------
+// ----------------------------------------------------
 //
-//	GROUPEDCONTENT GROUPEDCONTENT GROUPEDCONTENT
+//	CONTENTROW/GROUP CONTENTROW/GROUP CONTENTROW/GROUP
 //
-// \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+// \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
 
-/* type Templatable interface {
-	Pathable
-	ToHtml() template.HTML
+func (cg *ContentGroup) GetVertical() int {
+	return cg.Row.GetVertical()
 }
 
-type Editable interface {
-	Pathable
-	ToEditableHtml() template.HTML
+// Returns true if the content was the same type as that of the group and was added to the row, or false otherwise
+func (cg *ContentGroup) addContent(c Contentable) bool {
+	// TODO: check for Sound also? so they end up in their own groups
+	if !canMatchGroup(cg.Row.Members[cg.End-1].Content, c) {
+		return false
+	}
+
+	cg.Row.Members = append(cg.Row.Members, createGroupedContent(c, cg))
+	cg.End++
+
+	c.SetHorizontal(cg.End - 1)
+
+	return true
 }
 
-type GroupedContent interface {
-	Templatable
-	Editable
+// Removes content at position hor
+func (cg *ContentGroup) removeContent(hor int) {
+	cg.Row.Members = append(cg.Row.Members[:hor], cg.Row.Members[hor+1:]...)
+
+	// Reindex horiozontally Row[hor:]
+	for _, member := range cg.Row.Members[hor:] {
+		member.Content.SetHorizontal(member.Content.GetHorizontal() - 1)
+	}
+
+	cg.End--
 }
 
-// GroupedContent
-type TextGroup struct {
-	Texts []Text
+// i and j can be of same type
+// or they can split up a group, like X V V V -> V X V V
+func (cg *ContentGroup) swapContents(i, j int) {
+	// this method was called on the group of Row[i], so content i must belong to this group
+	if i < cg.Start || i >= cg.End {
+		panic("unexpected index error when swapping contents")
+	}
+
+	row := cg.Row.Members
+	iContent := row[i].Content
+	jContent := row[j].Content
+	if canMatchGroup(iContent, jContent) {
+		// CASE 1: i.type == j.type => X X X X -> X X X X
+
+		iContent.SetHorizontal(j)
+		jContent.SetHorizontal(i)
+
+		row[i], row[j] = row[j], row[i]
+	} else {
+		// CASE 2: i.type != j.type => X V V V -> V X V V
+		cg.swapAcrossGroups(i, j)
+	}
+
 }
 
-// GroupedContent
-type MediaGroup struct {
-	Media []Mediable
-} */
+func (cg *ContentGroup) swapAcrossGroups(i, j int) {
+	row := cg.Row.Members
+	rowLen := len(row)
 
-type GroupedContent interface {
-	Templatable
-	Editable
-	GetIndex() int
-	GetLength() int
-	GetContents() []Contentable
-	SetContents(contents []Contentable)
-	Set(c Contentable, horizontal int)
+	row[i].Content.SetHorizontal(j)
+	row[j].Content.SetHorizontal(i)
+
+	row[i], row[j] = row[j], row[i]
+	// i and j have swapped position, i,j -> j,i
+
+	// A. (maybe ... V X V X X X -> V V X X X X, must check if i and j can join their groups)
+	// B. (maybe ... V X V V V -> V V X V V, must check if j can join the group)
+	// C. (maybe ... X V X X X -> V X X X X, must check if i can join the group)
+	caseB := canMatchGroup(row[j].Content, row[j-1].Content)
+	caseC := canMatchGroup(row[i].Content, row[i+1].Content)
+	caseA := caseB && caseC
+
+	// Adjust boundaries of content group after swap.
+	// Only call if types of content group match, only call from swapAcrossGroups.
+	// Assumes the content itself has already been moved
+	appendFirstFromTo := func(cg *ContentGroup, cg2 *ContentGroup) {
+		cg.Start++
+		cg2.End++
+	}
+
+	prependLastFromTo := func(cg *ContentGroup, cg2 *ContentGroup) {
+		cg.End--
+		cg2.Start--
+	}
+
+	if i > 0 && j < rowLen && caseA {
+		// check if both j can join j-1, and i can join i+1, requires i_idx was larger than 0 and j_idx was less than len(row)
+
+		// j must join (j-1).Group and i must join (i+1).Group
+		appendFirstFromTo(row[j].Group, row[j-1].Group)
+		prependLastFromTo(row[i].Group, row[i+1].Group)
+	} else if i > 0 && caseB {
+		// check if j can join j-1, requires i_idx was not 0
+
+		appendFirstFromTo(row[j].Group, row[j-1].Group)
+	} else if j < rowLen && caseC {
+		// check if i can join i+1, requires j_idx was less than len(row)
+
+		prependLastFromTo(row[i].Group, row[i+1].Group)
+	} else {
+		panic("unexpected case when moving content between groups")
+	}
+
 }
 
-// GroupedContent
-type TextGroup struct {
-	Texts []Contentable
+// TODO: use some kind of type enum?
+func canMatchGroup(c1 Contentable, c2 Contentable) bool {
+	switch c1.(type) {
+	case *Text:
+		if _, ok := c2.(*Text); !ok {
+			return false
+		}
+	case Mediable:
+		if _, ok := c2.(Mediable); !ok {
+			return false
+		}
+	default:
+		panic("unexpected content type when matching content groups")
+	}
+
+	return true
 }
 
-func (tg *TextGroup) GetName(prefix string) string {
-	return prefix + "text-group"
+func (cr *ContentRow) GetVertical() int {
+	return cr.Members[0].Content.GetVertical()
 }
 
-func (tg *TextGroup) GetPath(fileName string) string {
+func (cr *ContentRow) SetVertical(vertical int) {
+	for _, member := range cr.Members {
+		member.Content.SetVertical(vertical)
+	}
+}
+
+// Adds c to the final ContentGroup if types match, if not it appends the content in a new ContentGroup to the row.
+// If the content added is the first added to the row, then the vertical position of the content forms the basis for the vertical of the whole row.
+func (cr *ContentRow) AddContent(c Contentable) {
+	rowLen := len(cr.Members)
+	if rowLen == 0 {
+		cr.Members = append(cr.Members, cr.getNewGroupedContent(c))
+		c.SetHorizontal(0)
+		return
+	}
+
+	c.SetVertical(cr.GetVertical())
+	final := cr.Members[rowLen-1]
+	if ok := final.Group.addContent(c); !ok {
+		cr.Members = append(cr.Members, createGroupedContent(c, cr.getNewContentGroup(rowLen, rowLen+1)))
+		c.SetHorizontal(rowLen)
+	}
+}
+
+func (cr *ContentRow) RemoveContent(horizontal int) {
+	cr.Members[horizontal].Group.removeContent(horizontal)
+}
+
+// Returns a new *ContentRow with a vertical index of the Contentable passed.
+// If there are multiple rows, only call on the final row
+func (cr *ContentRow) GetNewRow(c Contentable) *ContentRow {
+	return &ContentRow{
+		Members: []*GroupedContent{
+			cr.getNewGroupedContent(c),
+		},
+	}
+}
+
+// i must be less than j when calling this method
+func (cr *ContentRow) SwapContents(i, j int) {
+	cr.Members[i].Group.swapContents(i, j)
+}
+
+func (cr *ContentRow) SetContent(hor int, c Contentable) {
+	c.SetHorizontal(hor)
+	cr.Members[hor].Content = c
+}
+
+func (cr *ContentRow) GetContentGroups() []*ContentGroup {
+	if len(cr.Members) == 0 {
+		return nil
+	}
+
+	groups := make([]*ContentGroup, 0)
+
+	var last *ContentGroup
+	for _, m := range cr.Members {
+		if m.Group != last {
+			groups = append(groups, m.Group)
+			last = m.Group
+		}
+	}
+
+	return groups
+}
+
+func (cr *ContentRow) getNewContentGroup(startIdx int, endIdx int) *ContentGroup {
+	return &ContentGroup{
+		Row:   cr,
+		Start: startIdx,
+		End:   endIdx,
+	}
+}
+
+func createGroupedContent(c Contentable, cg *ContentGroup) *GroupedContent {
+	return &GroupedContent{
+		Content: c,
+		Group:   cg,
+	}
+}
+
+// Only use to create the first member on a row
+func (cr *ContentRow) getNewGroupedContent(c Contentable) *GroupedContent {
+	return &GroupedContent{
+		Content: c,
+		Group:   cr.getNewContentGroup(0, 1),
+	}
+}
+
+func (cg *ContentGroup) GetName(prefix string) string {
+	members := cg.Row.Members[cg.Start:cg.End]
+	switch members[0].Content.(type) {
+	case *Text:
+		return prefix + "text-group"
+	/* case *Sound:
+	return prefix + "sound" */
+	case *Sound, *Video, *Image, *EmptyMedia:
+		return prefix + "media-group"
+	default:
+		panic("unexpected content type when getting name")
+	}
+}
+
+func (cg *ContentGroup) GetPath(fileName string) string {
 	return fmt.Sprintf("./resources/templates/content/groups/%s.html", fileName)
 }
 
-func (tg *TextGroup) ToHtml() template.HTML {
-	return contentGroupToHtml(tg, false)
+func (cg *ContentGroup) ToHtml() template.HTML {
+	return cg.contentGroupToHtml(false)
 }
 
-func (tg *TextGroup) ToEditableHtml() template.HTML {
-	return contentGroupToHtml(tg, true)
+func (cg *ContentGroup) ToEditableHtml() template.HTML {
+	return cg.contentGroupToHtml(true)
 }
 
-// Assumes Media is not empty/nil
-func (tg *TextGroup) GetIndex() int {
-	return tg.Texts[0].GetVertical()
-}
-
-func (tg *TextGroup) GetLength() int {
-	return len(tg.Texts)
-}
-
-func (tg *TextGroup) GetContents() []Contentable {
-	return tg.Texts
-}
-
-func (tg *TextGroup) SetContents(contents []Contentable) {
-	tg.Texts = contents
-}
-
-// Assumes valid index
-func (tg *TextGroup) Set(c Contentable, horizontal int) {
-	tg.Texts[horizontal] = c
-}
-
-// GroupedContent
-type MediaGroup struct {
-	Media []Contentable
-}
-
-func (mg *MediaGroup) GetName(prefix string) string {
-	return prefix + "media-group"
-}
-
-func (mg *MediaGroup) GetPath(fileName string) string {
-	return fmt.Sprintf("./resources/templates/content/groups/%s.html", fileName)
-}
-
-func (mg *MediaGroup) ToHtml() template.HTML {
-	return contentGroupToHtml(mg, false)
-}
-
-func (mg *MediaGroup) ToEditableHtml() template.HTML {
-	return contentGroupToHtml(mg, true)
-}
-
-// Assumes Media is not empty/nil
-func (mg *MediaGroup) GetIndex() int {
-	return mg.Media[0].GetVertical()
-}
-
-func (mg *MediaGroup) GetLength() int {
-	return len(mg.Media)
-}
-
-func (mg *MediaGroup) GetContents() []Contentable {
-	return mg.Media
-}
-
-func (mg *MediaGroup) SetContents(contents []Contentable) {
-	mg.Media = contents
-}
-
-// Assumes valid index
-func (mg *MediaGroup) Set(c Contentable, horizontal int) {
-	mg.Media[horizontal] = c
-}
-
-func contentGroupToHtml(gc GroupedContent, editable bool) template.HTML {
+func (cg *ContentGroup) contentGroupToHtml(editable bool) template.HTML {
 	fileNamePrefix := ""
 	if editable {
 		fileNamePrefix = "editable/"
 	}
 
-	templ, err := template.New(gc.GetName("") + ".html").Funcs(template.FuncMap{
+	name := cg.GetName("")
+	path := cg.GetPath(cg.GetName(fileNamePrefix))
+
+	templ, err := template.New(name + ".html").Funcs(template.FuncMap{
 		"add": func(a, b int) int { return a + b },
-	}).ParseFiles(gc.GetPath(gc.GetName(fileNamePrefix)))
+	}).ParseFiles(path)
 	if err != nil {
 		log.Println(err)
 	}
 
+	type MembersLengthVertical struct {
+		Members  []*GroupedContent
+		Length   int
+		Vertical int
+	}
+
+	data := &MembersLengthVertical{
+		cg.Row.Members[cg.Start:cg.End],
+		cg.End - cg.Start,
+		cg.Row.GetVertical(),
+	}
+
 	var buf bytes.Buffer
-	if err := templ.Execute(&buf, gc); err != nil {
-		panic(fmt.Sprintf("unexpected error executing %s HTML template", gc.GetName("")))
+	if err := templ.Execute(&buf, data); err != nil {
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", name))
 	}
 
 	return template.HTML(buf.String())
@@ -2251,6 +2386,8 @@ func organizeWorksHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	var _ Mediable = (*EmptyMedia)(nil)
+
 	mux := http.NewServeMux()
 
 	// TODO: using mux to handle means .jpg, . will get replaced with / from subdomainPeriodReplacer

@@ -21,4 +21,9 @@
 .options-container {
     grid-area: options;
     justify-self: end;
+    align-self: start;
+}
+
+.options-container > button {
+    padding: 0;
 }

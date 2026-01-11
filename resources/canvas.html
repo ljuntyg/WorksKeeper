@@ -10,9 +10,9 @@
     
     <!-- WorkEditing is passed in-->
     
-    <form method="post" enctype="multipart/form-data" class="aside-with-main-canvas">
+    <form method="post" enctype="multipart/form-data">
       
-      <div class="main-container">
+      <div class="canvas-main-container">
         <aside class="tools-container">
           <fieldset>
             
@@ -61,9 +61,9 @@
     <script>
       document.querySelector('form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const formData = new FormData(e.target);
-        
+
         const submitter = e.submitter;
         if (submitter && submitter.name) {
           formData.append(submitter.name, submitter.value);
@@ -77,9 +77,11 @@
           
           if (response.ok) {
             const html = await response.text();
+            const scrollY = window.scrollY;
             document.open();
             document.write(html);
             document.close();
+            window.scrollTo(0, scrollY);
           } else {
             console.error('Form submission failed:', response.status);
           }

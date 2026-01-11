@@ -1,12 +1,7 @@
-<!-- MediaGroup is passed in -->
-<div class="media-row-container" id="row[{{ .GetIndex }}]">
-  <section class="media-gallery-container" id="gallery[{{ .GetIndex }}]">
-    {{ range .Media }}
-    {{ .ToHtml }}
+<div class="media-row-container" id="row[{{ .Vertical }}]">
+  <section class="media-gallery-container" id="gallery[{{ .Vertical }}]">
+    {{ range .Members }}
+    {{ .Content.ToHtml }}
     {{ end }}
   </section>
- 
-  <script>
-    initGallery({{ $.GetIndex }})
-  </script>
 </div>

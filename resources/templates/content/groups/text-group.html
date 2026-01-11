@@ -1,8 +1,7 @@
-<!-- TextGroup is passed in -->
 <div class="text-row-container">
   <section class="text-gallery-container">
-    {{ range .Texts }}
-    {{ .ToHtml }}
+    {{ range .Members }}
+    {{ .Content.ToHtml }}
     {{ end }}
   </section>
 </div>

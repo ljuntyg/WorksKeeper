@@ -115,9 +115,11 @@
           
           if (response.ok) {
             const html = await response.text();
+            const scrollY = window.scrollY;
             document.open();
             document.write(html);
             document.close();
+            window.scrollTo(0, scrollY);
           } else {
             console.error('Form submission failed:', response.status);
           }

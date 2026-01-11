@@ -92,8 +92,8 @@ var currentFilter = 0
 var maxNestedSeries = 2
 var maxWorkContents = 10
 var maxSeriesListings = 2
-var maxWorks = 80
-var maxSeries = 5
+var maxWorks = 4
+var maxSeries = 4
 
 func init() {
 	log.Println("calling MOCK init()")
@@ -149,9 +149,9 @@ func initMockTagValues() []*TagValues {
 func (db *WorksKeeperDB) SaveWork(w *Work) {
 	db.Listings[w.GetNumbering()] = w
 
-	for _, row := range w.Contents {
-		for _, c := range row.GetContents() {
-			c.Save()
+	for _, row := range w.ContentRows {
+		for _, member := range row.Members {
+			member.Content.Save()
 		}
 	}
 }
@@ -430,12 +430,12 @@ func getMockWork() *Work {
 	contents := getMockContents()
 
 	work := &Work{
-		Title:     fmt.Sprintf("Mock work #%d", currentWork),
-		Length:    1030,
-		Id:        uuid.New(),
-		Numbering: getMockNumbering(&currentWork, "work"),
-		Tags:      getMockTags(),
-		IsPublic:  true,
+		Title:       fmt.Sprintf("Mock work #%d", currentWork),
+		Id:          uuid.New(),
+		Numbering:   getMockNumbering(&currentWork, "work"),
+		ContentRows: []*ContentRow{},
+		Tags:        getMockTags(),
+		IsPublic:    true,
 	}
 
 	for _, c := range contents {
@@ -450,8 +450,6 @@ func getMockEmptyWork() *Work {
 
 	return &Work{
 		Title:     "Untitled",
-		Length:    0,
-		Contents:  []GroupedContent{},
 		Id:        uuid.New(),
 		Numbering: getMockNumbering(&currentWork, "work"),
 	}
