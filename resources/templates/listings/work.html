@@ -1,39 +1,38 @@
-<h1 class="title">{{ .GetTitle }}</h1>
-
-{{ range $rowIdx, $contentRow := .Contents }}
-<section class="row-container" id="row[{{ $rowIdx }}]">
-  <section class="contents-container" id="gallery[{{ $rowIdx }}]">
-  {{ range $contentRow }}
-  {{ .ToHtml }}
-  {{ end }}
-  </section>
-</section>
-
 <!-- In order to bind the max height of all media to the smallest media, fix the height of the gallery container to that height, and let media on the row fill the container --> 
 <script>
-  const row = document.getElementById("row[{{ $rowIdx }}]");
-  const gallery = document.getElementById("gallery[{{ $rowIdx }}]");
-  const media = gallery.querySelectorAll("img, video");
+  function initGallery(index) {
+    console.log("init gallery script disabled");
+    return;
 
-  let maxHeight = Infinity
-  function setMaxHeight() {
-    media.forEach(el => {
-      if (el.tagName === "IMG" && el.naturalHeight) {
-        maxHeight = Math.min(maxHeight, el.naturalHeight);
-      }
+    const row = document.getElementById(`row[${index}]`);
+    const gallery = document.getElementById(`gallery[${index}]`);
+    const media = gallery.querySelectorAll("img, video");
 
-      if (el.tagName === "VIDEO" && el.videoHeight) {
-        maxHeight = Math.min(maxHeight, el.videoHeight);
-      }
-    });
+    let maxHeight = Infinity;
 
-    maxHeight = Math.min(maxHeight, row.getBoundingClientRect().height);
-    gallery.style.maxHeight = maxHeight + "px";
-    row.style.maxHeight = maxHeight + "px";
-  }
+    function setMaxHeight() {
+      media.forEach(el => {
+        if (el.tagName === "IMG" && el.naturalHeight) {
+          maxHeight = Math.min(maxHeight, el.naturalHeight);
+        }
+        if (el.tagName === "VIDEO" && el.videoHeight) {
+          maxHeight = Math.min(maxHeight, el.videoHeight);
+        }
+      });
 
-  if (media) {
-    window.addEventListener("load", setMaxHeight);
+      maxHeight = Math.min(maxHeight, row.getBoundingClientRect().height);
+      gallery.style.maxHeight = `${maxHeight}px`;
+      row.style.maxHeight = `${maxHeight}px`;
+    }
+    
+    if (media) {
+      window.addEventListener("load", setMaxHeight);
+    }
   }
 </script>
+
+<h1 class="title">{{ .GetTitle }}</h1>
+
+{{ range .Contents }}
+{{ .ToHtml }}
 {{ end }}

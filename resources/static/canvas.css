@@ -1,5 +1,4 @@
 .main-container {
-    width: 100vw;
     display: grid;
     grid-template-columns: 1fr 80vw 1fr;
     grid-template-rows: 2rem auto;
@@ -17,22 +16,32 @@
     grid-area: canvas
 }
 
-.title {
-    text-align: center;
-}
-
-.row-container {
+.editable-text-row-container {
     display: flex;
     justify-content: center;
 }
 
-.editables-container {
+.editable-text-gallery-container {
+    display: flex;
+    justify-content: center;
+}
+
+.editable-media-row-container {
+    display: flex;
+    justify-content: center;
+}
+
+.editable-media-gallery-container {
     display: flex;
     align-items: center;
 }
 
-video, img, audio {
+.editable-media-gallery-container figure {
+    margin: 0;
+}
+
+.editable-media-gallery-container video, img, audio {
     max-height: 80vh;
     max-width: 100%;
     object-fit: scale-down;
-}
+} 

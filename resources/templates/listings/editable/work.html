@@ -1,3 +1,37 @@
+<!-- In order to bind the max height of all media to the smallest media, fix the height of the gallery container to that height, and let media on the row fill the container --> 
+<!-- TODO: improve logic for finding correct max height -->
+<script>
+  function initEditingGallery(index) {
+    console.log("editing gallery script disabled");
+    return;
+
+    const row = document.getElementById(`row[${index}]`);
+    const gallery = document.getElementById(`gallery[${index}]`);
+    const media = gallery.querySelectorAll("img, video");
+
+    let maxHeight = Infinity;
+
+    function setMaxHeight() {
+      media.forEach(el => {
+        if (el.tagName === "IMG" && el.naturalHeight) {
+          maxHeight = Math.min(maxHeight, el.naturalHeight);
+        }
+        if (el.tagName === "VIDEO" && el.videoHeight) {
+          maxHeight = Math.min(maxHeight, el.videoHeight);
+        }
+      });
+
+      maxHeight = Math.min(maxHeight, row.getBoundingClientRect().height);
+      gallery.style.maxHeight = `${maxHeight}px`;
+      row.style.maxHeight = `${maxHeight}px`;
+    }
+    
+    if (media) {
+      window.addEventListener("load", setMaxHeight);
+    }
+  }
+</script>
+
 <h1 class="title">
   <textarea name="title-text">{{ .GetTitle }}</textarea>
 </h1>
@@ -5,8 +39,9 @@
 {{ $nbrRows := len .Contents }}
 {{ with .Contents }}
 {{ range . }}
-{{ if ne 0 (len .) }}
-{{ $first := index . 0 }}
+<!-- . = GroupedContent -->
+{{ if ne 0 (.GetLength) }}
+{{ $first := index .GetContents 0 }}
 <fieldset>
   
   <legend>
@@ -27,39 +62,7 @@
     {{ end }}
   </legend>
 
-  <section class="row-container">
-    <section class="editables-container">
-
-      <!-- List of row items -->
-      {{ $rowLen := len . }}
-      {{ range . }}
-      <fieldset>
-        {{ if ne 1 $rowLen }}
-        <legend>
-          <button type="submit" name="action" value="delete-horizontal:{{ .GetId }}">
-            ✕
-          </button>
-
-          {{ if ne .GetHorizontal 0 }}
-          <button type="submit" name="action" value="horizontal-left:{{ .GetId }}">
-            ←
-          </button>
-          {{ end }}
-
-          {{ if ne (add .GetHorizontal 1) $rowLen }}
-          <button type="submit" name="action" value="horizontal-right:{{ .GetId }}">
-            →
-          </button>
-          {{ end }}
-        </legend>
-        {{ end }}
-
-        {{ .ToEditableHtml }}
-      </fieldset>
-      {{ end }}
-
-    </section>
-  </section>
+  {{ .ToEditableHtml }}
 
   <menu>
     <li>

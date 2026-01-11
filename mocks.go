@@ -150,7 +150,7 @@ func (db *WorksKeeperDB) SaveWork(w *Work) {
 	db.Listings[w.GetNumbering()] = w
 
 	for _, row := range w.Contents {
-		for _, c := range row {
+		for _, c := range row.GetContents() {
 			c.Save()
 		}
 	}
@@ -451,7 +451,7 @@ func getMockEmptyWork() *Work {
 	return &Work{
 		Title:     "Untitled",
 		Length:    0,
-		Contents:  [][]Contentable{},
+		Contents:  []GroupedContent{},
 		Id:        uuid.New(),
 		Numbering: getMockNumbering(&currentWork, "work"),
 	}

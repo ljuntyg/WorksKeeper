@@ -130,8 +130,9 @@ type Work struct {
 	Title        string
 	Length       int
 	IsPublic     bool
-	Contents     [][]Contentable // [Vertical][Horizontal]
-	Tags         []*Tag
+	// Contents     [][]Contentable // [Vertical][Horizontal]
+	Contents []GroupedContent
+	Tags     []*Tag
 }
 
 type HandlerSearchable interface {
@@ -164,11 +165,16 @@ type Positionable interface {
 	SetPosition(vertical int, horizontal int)
 }
 
+type Groupable interface {
+	ToNewGroup() GroupedContent
+}
+
 type Contentable interface {
 	Templatable
 	Editable
 	Positionable
 	Saveable
+	Groupable
 	GetId() uuid.UUID
 	GetWork() *Work
 }
@@ -355,13 +361,14 @@ func (w *Work) Save() {
 
 func (w *Work) RemoveContent(c Contentable) {
 	// Remove whole row if the only element on the row is removed
-	if c.GetHorizontal() == 0 && len(w.Contents[c.GetVertical()]) == 1 {
+	/* if c.GetHorizontal() == 0 && len(w.Contents[c.GetVertical()]) == 1 */
+	if c.GetHorizontal() == 0 && len(w.Contents[c.GetVertical()].GetContents()) == 1 {
 		w.RemoveRow(c.GetVertical())
 	} else {
 		pos := c.GetPosition()
 		vert := pos.Vertical
 		hor := pos.Horizontal
-		row := w.Contents[vert]
+		row := w.Contents[vert].GetContents()
 
 		row = append(row[:hor], row[hor+1:]...)
 
@@ -369,7 +376,7 @@ func (w *Work) RemoveContent(c Contentable) {
 			row[i].SetPosition(vert, i)
 		}
 
-		w.Contents[vert] = row
+		w.Contents[vert].SetContents(row)
 		w.Save()
 	}
 }
@@ -381,7 +388,7 @@ func (w *Work) RemoveRow(vert int) {
 	)
 
 	for v := vert; v < len(w.Contents); v++ {
-		for _, c := range w.Contents[v] {
+		for _, c := range w.Contents[v].GetContents() {
 			c.SetVertical(v)
 		}
 	}
@@ -393,18 +400,18 @@ func (w *Work) AddContent(c Contentable) {
 	vert := len(w.Contents)
 
 	c.SetVertical(vert)
-	w.Contents = append(w.Contents, []Contentable{c})
+	w.Contents = append(w.Contents, c.ToNewGroup())
 
 	w.Save()
 }
 
 func (w *Work) AddHorizontal(c Contentable, vert int) {
-	row := w.Contents[vert]
+	row := w.Contents[vert].GetContents()
 
 	hor := len(row)
 	c.SetPosition(vert, hor)
 
-	w.Contents[vert] = append(row, c)
+	w.Contents[vert].SetContents(append(row, c))
 	w.Save()
 }
 
@@ -448,7 +455,7 @@ func (w *Work) MoveLeft(c Contentable) {
 		return
 	}
 
-	row := w.Contents[v]
+	row := w.Contents[v].GetContents()
 	swap(row, h, h-1, v)
 
 	w.Save()
@@ -458,7 +465,7 @@ func (w *Work) MoveRight(c Contentable) {
 	pos := c.GetPosition()
 	vert, hor := pos.Vertical, pos.Horizontal
 
-	row := w.Contents[vert]
+	row := w.Contents[vert].GetContents()
 	if hor >= len(row)-1 {
 		return
 	}
@@ -533,7 +540,8 @@ func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Reques
 					text := getText(id)
 					text.Text = v[0]
 
-					work.Contents[text.GetVertical()][text.GetHorizontal()] = text
+					// TODO: clean up
+					work.Contents[text.GetVertical()].Set(text, text.GetHorizontal())
 					work.Save()
 				}
 
@@ -545,7 +553,12 @@ func (work *Work) HandleCanvasExistingData(w http.ResponseWriter, r *http.Reques
 
 					media := getMedia(id)
 					media.SetCaption(&Caption{v[0]})
-					work.Contents[media.GetPosition().Vertical][media.GetPosition().Horizontal] = media
+
+					// TODO: clean up
+					contentGroup := work.Contents[media.GetVertical()]
+					contents := contentGroup.GetContents()
+					contents[media.GetHorizontal()] = media
+					contentGroup.SetContents(contents)
 
 					work.Save()
 				}
@@ -574,7 +587,8 @@ func (work *Work) HandleCanvasAddCaption(w http.ResponseWriter, r *http.Request)
 	media := getMedia(id)
 	text := r.FormValue("added-caption")
 	media.SetCaption(&Caption{text})
-	work.Contents[media.GetVertical()][media.GetHorizontal()] = media
+
+	work.Contents[media.GetVertical()].Set(media, media.GetHorizontal())
 	work.Save()
 }
 
@@ -671,7 +685,8 @@ func (work *Work) HandleCanvasDeleteCaption(w http.ResponseWriter, r *http.Reque
 	id := uuid.MustParse(actionValue)
 	media := getMedia(id)
 	media.SetCaption(nil)
-	work.Contents[media.GetVertical()][media.GetHorizontal()] = media
+
+	work.Contents[media.GetVertical()].Set(media, media.GetHorizontal())
 	work.Save()
 }
 
@@ -685,7 +700,10 @@ func (work *Work) HandleCanvasDeleteHorizontal(w http.ResponseWriter, r *http.Re
 }
 
 func (w *Work) ToHtml() template.HTML {
-	templ := template.Must(template.ParseFiles(w.getWorkTemplatePath(false)))
+	templ, err := template.ParseFiles(w.getWorkTemplatePath(false))
+	if err != nil {
+		log.Println(err)
+	}
 	var buf bytes.Buffer
 	if err := templ.Execute(&buf, w); err != nil {
 		panic(fmt.Sprintf("unexpected error executing %s HTML template", "work"))
@@ -721,11 +739,12 @@ func (w *Work) getWorkTemplateName(editable bool) string {
 
 // GetPath(
 func (w *Work) getWorkTemplatePath(editable bool) string {
-	return fmt.Sprintf("./resources/templates/listings/%s.html", w.getWorkTemplateName(editable))
+	ret := fmt.Sprintf("./resources/templates/listings/%s.html", w.getWorkTemplateName(editable))
+	return ret
 }
 
 func (w *Work) reindexRow(vert int) {
-	for _, c := range w.Contents[vert] {
+	for _, c := range w.Contents[vert].GetContents() {
 		c.SetVertical(vert)
 	}
 }
@@ -889,7 +908,7 @@ func handleContentUpload(r *http.Request, work *Work, mediaPos Position) error {
 		return err
 	}
 
-	work.Contents[mediaPos.Vertical][mediaPos.Horizontal] = media
+	work.Contents[mediaPos.Vertical].Set(media, mediaPos.Horizontal)
 	work.Save()
 
 	return nil
@@ -917,6 +936,7 @@ func (t *Text) GetName(prefix string) string {
 	return prefix + "text"
 }
 
+// TODO: ???
 func (t *Text) GetPath(fileName string) string {
 	editable := false
 	if strings.HasPrefix(fileName, "editable") {
@@ -953,6 +973,12 @@ func (t *Text) GetPosition() Position {
 
 func (t *Text) SetPosition(vertical int, horizontal int) {
 	t.Position.Vertical, t.Position.Horizontal = vertical, horizontal
+}
+
+func (t *Text) ToNewGroup() GroupedContent {
+	return &TextGroup{
+		[]Contentable{t},
+	}
 }
 
 func (m *EmptyMedia) GetId() uuid.UUID {
@@ -1036,6 +1062,12 @@ func (m *EmptyMedia) SetPosition(vertical int, horizontal int) {
 	m.Position.Vertical, m.Position.Horizontal = vertical, horizontal
 }
 
+func (m *EmptyMedia) ToNewGroup() GroupedContent {
+	return &MediaGroup{
+		[]Contentable{m},
+	}
+}
+
 func (s *Sound) GetId() uuid.UUID {
 	return s.Id
 }
@@ -1113,6 +1145,12 @@ func (s *Sound) GetPosition() Position {
 
 func (s *Sound) SetPosition(vertical int, horizontal int) {
 	s.Position.Vertical, s.Position.Horizontal = vertical, horizontal
+}
+
+func (s *Sound) ToNewGroup() GroupedContent {
+	return &MediaGroup{
+		[]Contentable{s},
+	}
 }
 
 func (v *Video) GetId() uuid.UUID {
@@ -1193,6 +1231,12 @@ func (v *Video) SetPosition(vertical int, horizontal int) {
 	v.Position.Vertical, v.Position.Horizontal = vertical, horizontal
 }
 
+func (v *Video) ToNewGroup() GroupedContent {
+	return &MediaGroup{
+		[]Contentable{v},
+	}
+}
+
 func (i *Image) GetId() uuid.UUID {
 	return i.Id
 }
@@ -1271,6 +1315,12 @@ func (i *Image) SetPosition(vertical int, horizontal int) {
 	i.Position.Vertical, i.Position.Horizontal = vertical, horizontal
 }
 
+func (i *Image) ToNewGroup() GroupedContent {
+	return &MediaGroup{
+		[]Contentable{i},
+	}
+}
+
 func getContentTemplatePath(c Contentable, editable bool) string {
 	editablePrefix := ""
 	if editable {
@@ -1330,6 +1380,154 @@ func mediaToCaptionHtml(m Mediable, editable bool) template.HTML {
 		Caption: m.GetCaption(),
 	}); err != nil {
 		panic(fmt.Sprintf("unexpected error executing %s HTML template", m.GetName("")))
+	}
+
+	return template.HTML(buf.String())
+}
+
+// ----------------------------------------------
+//
+//	GROUPEDCONTENT GROUPEDCONTENT GROUPEDCONTENT
+//
+// \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+
+/* type Templatable interface {
+	Pathable
+	ToHtml() template.HTML
+}
+
+type Editable interface {
+	Pathable
+	ToEditableHtml() template.HTML
+}
+
+type GroupedContent interface {
+	Templatable
+	Editable
+}
+
+// GroupedContent
+type TextGroup struct {
+	Texts []Text
+}
+
+// GroupedContent
+type MediaGroup struct {
+	Media []Mediable
+} */
+
+type GroupedContent interface {
+	Templatable
+	Editable
+	GetIndex() int
+	GetLength() int
+	GetContents() []Contentable
+	SetContents(contents []Contentable)
+	Set(c Contentable, horizontal int)
+}
+
+// GroupedContent
+type TextGroup struct {
+	Texts []Contentable
+}
+
+func (tg *TextGroup) GetName(prefix string) string {
+	return prefix + "text-group"
+}
+
+func (tg *TextGroup) GetPath(fileName string) string {
+	return fmt.Sprintf("./resources/templates/content/groups/%s.html", fileName)
+}
+
+func (tg *TextGroup) ToHtml() template.HTML {
+	return contentGroupToHtml(tg, false)
+}
+
+func (tg *TextGroup) ToEditableHtml() template.HTML {
+	return contentGroupToHtml(tg, true)
+}
+
+// Assumes Media is not empty/nil
+func (tg *TextGroup) GetIndex() int {
+	return tg.Texts[0].GetVertical()
+}
+
+func (tg *TextGroup) GetLength() int {
+	return len(tg.Texts)
+}
+
+func (tg *TextGroup) GetContents() []Contentable {
+	return tg.Texts
+}
+
+func (tg *TextGroup) SetContents(contents []Contentable) {
+	tg.Texts = contents
+}
+
+// Assumes valid index
+func (tg *TextGroup) Set(c Contentable, horizontal int) {
+	tg.Texts[horizontal] = c
+}
+
+// GroupedContent
+type MediaGroup struct {
+	Media []Contentable
+}
+
+func (mg *MediaGroup) GetName(prefix string) string {
+	return prefix + "media-group"
+}
+
+func (mg *MediaGroup) GetPath(fileName string) string {
+	return fmt.Sprintf("./resources/templates/content/groups/%s.html", fileName)
+}
+
+func (mg *MediaGroup) ToHtml() template.HTML {
+	return contentGroupToHtml(mg, false)
+}
+
+func (mg *MediaGroup) ToEditableHtml() template.HTML {
+	return contentGroupToHtml(mg, true)
+}
+
+// Assumes Media is not empty/nil
+func (mg *MediaGroup) GetIndex() int {
+	return mg.Media[0].GetVertical()
+}
+
+func (mg *MediaGroup) GetLength() int {
+	return len(mg.Media)
+}
+
+func (mg *MediaGroup) GetContents() []Contentable {
+	return mg.Media
+}
+
+func (mg *MediaGroup) SetContents(contents []Contentable) {
+	mg.Media = contents
+}
+
+// Assumes valid index
+func (mg *MediaGroup) Set(c Contentable, horizontal int) {
+	mg.Media[horizontal] = c
+}
+
+func contentGroupToHtml(gc GroupedContent, editable bool) template.HTML {
+	fileNamePrefix := ""
+	if editable {
+		fileNamePrefix = "editable/"
+	}
+
+	templ, err := template.New(gc.GetName("") + ".html").Funcs(template.FuncMap{
+		"add": func(a, b int) int { return a + b },
+	}).ParseFiles(gc.GetPath(gc.GetName(fileNamePrefix)))
+	if err != nil {
+		log.Println(err)
+	}
+
+	var buf bytes.Buffer
+	if err := templ.Execute(&buf, gc); err != nil {
+		panic(fmt.Sprintf("unexpected error executing %s HTML template", gc.GetName("")))
 	}
 
 	return template.HTML(buf.String())

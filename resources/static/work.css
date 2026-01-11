@@ -2,49 +2,38 @@
     text-align: center;
 }
 
-.row-container {
-    max-height: 80vh; /* The actual max-height is this value or the height of the smallest figure */
-    height: 100%;
-    display: flex;
+figure {
+    margin-left: 0;
+    margin-right: 0;
 }
 
-.contents-container {
-    display: flex;
-    align-items: start;
-    justify-content: center;
+.text-row-container {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
 }
 
-.contents-container > figure {
-    height: 100%;
-    margin: 0;
+.text-gallery-container {
+    margin-left: 4rem;
+    margin-right: 4rem;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    justify-items: center;
 }
 
-video, img, audio {
-    max-height: 100%;
-    max-width: 100%;
-    object-fit: scale-down;
-} 
-
-/* .row-container {
+.media-row-container {
     display: flex;
     justify-content: center;
 }
-    
-.contents-container {
+
+.media-gallery-container {
     display: flex;
     align-items: center;
 }
-    
-video, img, audio {
+
+.media-gallery-container video, img, audio {
     max-height: 80vh;
     max-width: 100%;
     object-fit: scale-down;
-} */
-
-/* TODO?: use grid with 1fr instead of flex .contents-container for text specifically */
-p {
-    display: block;
-    margin-left: 2rem;
-    margin-right: 2rem;
-    align-self: flex-start;
 }

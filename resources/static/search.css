@@ -1,5 +1,4 @@
 .main-container {
-    width: 100vw;
     display: grid;
     grid-template-columns: 2fr 1fr max-content 3fr;
     grid-template-rows: 2rem auto auto auto;

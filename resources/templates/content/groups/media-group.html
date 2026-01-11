@@ -1,0 +1,12 @@
+<!-- MediaGroup is passed in -->
+<div class="media-row-container" id="row[{{ .GetIndex }}]">
+  <section class="media-gallery-container" id="gallery[{{ .GetIndex }}]">
+    {{ range .Media }}
+    {{ .ToHtml }}
+    {{ end }}
+  </section>
+ 
+  <script>
+    initGallery({{ $.GetIndex }})
+  </script>
+</div>

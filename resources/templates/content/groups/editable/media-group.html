@@ -1,0 +1,39 @@
+<!-- MediaGroup is passed in -->
+
+<div class="editable-media-row-container" id="row[{{ .GetIndex }}]">
+  <section class="editable-media-gallery-container" id="gallery[{{ .GetIndex }}]">
+
+    <!-- List of row items -->
+    {{ $rowLen := .GetLength }}
+    {{ range .Media }}
+    <fieldset>
+      {{ if ne 1 $rowLen }}
+      <legend>
+        <button type="submit" name="action" value="delete-horizontal:{{ .GetId }}">
+          ✕
+        </button>
+
+        {{ if ne .GetHorizontal 0 }}
+        <button type="submit" name="action" value="horizontal-left:{{ .GetId }}">
+          ←
+        </button>
+        {{ end }}
+
+        {{ if ne (add .GetHorizontal 1) $rowLen }}
+        <button type="submit" name="action" value="horizontal-right:{{ .GetId }}">
+          →
+        </button>
+        {{ end }}
+      </legend>
+      {{ end }}
+
+      {{ .ToEditableHtml }}
+    </fieldset>
+    {{ end }}
+
+  </section>
+
+  <script>
+    initEditingGallery({{ $.GetIndex }})
+  </script>
+</div>

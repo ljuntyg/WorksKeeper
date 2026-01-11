@@ -12,10 +12,6 @@ p {
     line-height: 1.5;
 }
 
-figure {
-    margin: 0;
-}
-
 table th {
     display: none;
 }
@@ -32,3 +28,6 @@ li {
     width: 10rem;
 }
 
+.title {
+    text-align: center;
+}

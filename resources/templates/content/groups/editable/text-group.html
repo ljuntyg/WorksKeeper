@@ -1,0 +1,34 @@
+<!-- TextGroup is passed in -->
+<div class="editable-text-row-container">
+  <section class="editable-text-gallery-container">
+
+    <!-- List of row items -->
+    {{ $rowLen := .GetLength }}
+    {{ range .Texts }}
+    <fieldset>
+      {{ if ne 1 $rowLen }}
+      <legend>
+        <button type="submit" name="action" value="delete-horizontal:{{ .GetId }}">
+          ✕
+        </button>
+
+        {{ if ne .GetHorizontal 0 }}
+        <button type="submit" name="action" value="horizontal-left:{{ .GetId }}">
+          ←
+        </button>
+        {{ end }}
+
+        {{ if ne (add .GetHorizontal 1) $rowLen }}
+        <button type="submit" name="action" value="horizontal-right:{{ .GetId }}">
+          →
+        </button>
+        {{ end }}
+      </legend>
+      {{ end }}
+
+      {{ .ToEditableHtml }}
+    </fieldset>
+    {{ end }}
+
+  </section>
+</div>
