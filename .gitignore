@@ -33,6 +33,7 @@ go.work.sum
 
 ## AND ##
 resources/media/*/*
+resources/test/*
 notes.md
 nginx.conf
 resources/test.html

@@ -372,7 +372,7 @@ func getMockImage(pos Position) *Image {
 
 // TODO:
 func getMockCaption() *Caption {
-	return &Caption{"Test caption"}
+	return &Caption{"<b>Test caption</b>"}
 }
 
 func (mt MediaType) GetMock(pos Position) Contentable {
