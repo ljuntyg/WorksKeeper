@@ -1,0 +1,93 @@
+<!-- Canvasable passed in -->
+<!doctype html>
+<html>
+  <!-- <head>
+    <link rel="stylesheet" href="/static/canvas.css">
+    <link rel="stylesheet" href="/static/work.css">
+    <link rel="stylesheet" href="/static/style.css">
+  </head> -->
+
+  <body>
+    
+    <form method="post" enctype="multipart/form-data">
+      
+      <div class="canvas-main-container">
+        <aside class="tools-container">
+          <fieldset>
+            
+            {{ if eq $.IsEditing true }}
+            <button type="submit" name="action" value="view-work:">
+              view work
+            </button>
+  
+            <menu>
+              <li>
+                <button type="submit" name="action" value="add-text:{{ .Work.GetId }}">
+                  & new text
+                </button>
+              </li>
+              
+              <li>
+                <button type="submit" name="action" value="add-media:{{ .Work.GetId }}">
+                  & new media
+                </button>
+              </li>
+            </menu>
+  
+            <input type="hidden" name="editing" value="true">
+            {{ else }}
+            <button type="submit" name="action" value="edit-work:">
+              compose work
+            </button>
+  
+            <input type="hidden" name="editing" value="false">
+            {{ end }}
+  
+          </fieldset>
+        </aside>
+  
+        <main class="canvas-container">
+          {{ if eq $.IsEditing true }}
+          {{ $.ToEditableHtml }}
+          {{ else }}
+          {{ $.ToHtml }}
+          {{ end }}
+        </main>
+      </div>
+  
+    </form>
+
+    <script>
+      document.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData(e.target);
+
+        const submitter = e.submitter;
+        if (submitter && submitter.name) {
+          formData.append(submitter.name, submitter.value);
+        }
+        
+        try {
+          const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (response.ok) {
+            const html = await response.text();
+            const scrollY = window.scrollY;
+            document.open();
+            document.write(html);
+            document.close();
+            window.scrollTo(0, scrollY);
+          } else {
+            console.error('Form submission failed:', response.status);
+          }
+        } catch (error) {
+          console.error('Error submitting form:', error);
+        }
+      });
+    </script>
+  </body>
+</html>
