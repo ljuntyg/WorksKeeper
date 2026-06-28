@@ -1,0 +1,35 @@
+<!-- SeriesData is passed in -->
+<!doctype html>
+<html>
+  <head>
+    <link rel="stylesheet" href="/static/series.css">
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+
+  <body>
+    <main class="main-container">
+      
+      <div class="title-container">
+        <h1>{{ $.TemplateSeries.GetTitle }}</h1>
+      </div>
+      
+      <div class="table-container">
+        <table>
+          <tr style="text-align: left">
+            <th>Time required</th>
+            <th>Title</th>
+          </tr>
+          {{ range $.TemplateSeries.Listables }}
+          <tr>
+            <td>{{ .GetTimeRequiredString }}</td>
+            <td>
+              <a href="{{ .GetNumberingUrlString }}">{{ .GetTitle }}</a>
+            </td>
+          </tr>
+          {{ end }}
+        </table>
+      </div>
+
+    </main>
+  </body>
+</html>

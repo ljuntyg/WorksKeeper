@@ -1,0 +1,26 @@
+<!-- TemplateGroup is passed in -->
+<div>
+  <section>
+
+    {{ range $.Templatables }}
+    <fieldset>
+      <legend>
+        <button type="submit" name="action" value="delete-horizontal:">
+          ✕
+        </button>
+
+        <button type="submit" name="action" value="horizontal-left:">
+          ←
+        </button>
+
+        <button type="submit" name="action" value="horizontal-right:">
+          →
+        </button>
+      </legend>
+
+      {{ .ToEditableHtml }}
+    </fieldset>
+    {{ end }}
+
+  </section>
+</div>

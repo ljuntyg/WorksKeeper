@@ -1,37 +1,25 @@
 package handler
 
 import (
-	"WorksKeeper/internal/frontend"
 	"WorksKeeper/internal/service"
-	"html/template"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 type CanvasHandler struct {
-	service  *service.CanvasService
-	template *template.Template
+	canvasService *service.CanvasService
 }
 
-type CanvasState struct {
-	Canvasable frontend.Canvasable
-	IsEditing  bool
-}
-
-func NewCanvasHandler(service *service.CanvasService, template *template.Template) *CanvasHandler {
-	return &CanvasHandler{
-		service:  service,
-		template: template,
-	}
+func (ch *CanvasHandler) Init(canvasService *service.CanvasService) {
+	ch.canvasService = canvasService
 }
 
 func (ch *CanvasHandler) HandleRequest(rw http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		ch.handleGet(rw, r)
-		/* case http.MethodPost:
-		ch.handlePost(rw, r) */
+		ch.handleGet(rw, r, true)
+	case http.MethodPost:
+		ch.handlePost(rw, r)
 	}
 }
 
@@ -42,37 +30,33 @@ func (ch *CanvasHandler) HandleRequestNew(rw http.ResponseWriter, r *http.Reques
 	}
 }
 
-func (ch *CanvasHandler) handleGet(rw http.ResponseWriter, r *http.Request) {
-	numbering := r.PathValue("numbering")
-	if numbering == "" {
-		log.Panicln("no numbering in path")
+func (ch *CanvasHandler) handleGet(rw http.ResponseWriter, r *http.Request, editing bool) {
+	id := mustNumberingStringToId(r.PathValue("numbering"))
+	ch.canvasService.GetTemplateData(id, editing).ExecuteTemplate(rw)
+}
+
+func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
+	/*
+		view-work
+		add-text
+		add-media
+		edit-work
+
+		delete content
+		move content */
+
+	action, _ := extractActionAndValueFromRequest(r)
+	log.Println(action)
+
+	switch action {
+	case "edit-work":
+		ch.handleGet(rw, r, true)
+	case "view-work":
+		ch.handleGet(rw, r, false)
 	}
-
-	idLen, err := strconv.Atoi(numbering[:1])
-	if err != nil {
-		log.Panicln("invalid numbering")
-	}
-
-	id, idErr := strconv.Atoi(numbering[1 : 1+idLen])
-	if idErr != nil {
-		log.Panicln("unable to parse id")
-	}
-
-	work := ch.service.GetWorkView(int64(id))
-
-	state := CanvasState{
-		Canvasable: work,
-		IsEditing:  false,
-	}
-
-	ch.writeHtml(rw, r, state)
 }
 
 func (ch *CanvasHandler) handleGetNew(rw http.ResponseWriter, r *http.Request) {
-	work := ch.service.GetNewWorkView()
+	work := ch.canvasService.GetNewWork()
 	http.Redirect(rw, r, "/compose"+work.GetNumberingUrlString(), http.StatusFound)
-}
-
-func (ch *CanvasHandler) writeHtml(rw http.ResponseWriter, r *http.Request, state CanvasState) {
-	ch.template.Execute(rw, state)
 }

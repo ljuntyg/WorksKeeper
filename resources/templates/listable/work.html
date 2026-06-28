@@ -31,16 +31,15 @@
   }
 </script>
 
+<!-- TemplateWork is passed in -->
 <article class="main-container">
   <div class="title-container">
-    <h1 class="title">{{ .GetTitle }}</h1>
+    <h1 class="title">{{ $.Work.Title }}</h1>
   </div>
   
   <section class="body-container">
-    {{ range .ContentRows }}
-    {{ range .GetContentGroups }}
+    {{ range $.TemplateCanvas.TemplateGroups }}
     {{ .ToHtml }}
-    {{ end }}
     {{ end }}
   </section>
 </article>

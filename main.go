@@ -33,19 +33,60 @@ func main() {
 		os.Getenv("PGPORT"),
 	)
 
+	canvasRepo := &repository.CanvasRepository{}
+	canvasRepo.Init(pgxPool)
+
+	captionRepo := &repository.CaptionRepository{}
+	captionRepo.Init(pgxPool)
+
+	groupRepo := &repository.GroupRepository{}
+	groupRepo.Init(pgxPool)
+
+	mediaRepo := &repository.MediaRepository{}
+	mediaRepo.Init(pgxPool)
+
+	sourceRepo := &repository.SourceRepository{}
+	sourceRepo.Init(pgxPool)
+
+	textRepo := &repository.TextRepository{}
+	textRepo.Init(pgxPool)
+
 	workRepo := &repository.WorkRepository{}
 	workRepo.Init(pgxPool)
 
 	seriesRepo := &repository.SeriesRepository{}
 	seriesRepo.Init(pgxPool)
 
+	canvasService := &service.CanvasService{}
+	canvasService.Init(canvasRepo, captionRepo, groupRepo, mediaRepo, sourceRepo, textRepo, workRepo)
+
 	homeService := &service.HomeService{}
-	homeService.Init(workRepo, seriesRepo)
+	homeService.Init(seriesRepo, workRepo)
+
+	seriesService := &service.SeriesService{}
+	seriesService.Init(seriesRepo, workRepo)
+
+	workService := &service.WorkService{}
+	workService.Init(canvasRepo, captionRepo, groupRepo, mediaRepo, sourceRepo, textRepo, workRepo)
+
+	canvasHandler := &handler.CanvasHandler{}
+	canvasHandler.Init(canvasService)
 
 	homeHandler := &handler.HomeHandler{}
 	homeHandler.Init(homeService)
 
+	seriesHandler := &handler.SeriesHandler{}
+	seriesHandler.Init(seriesService)
+
+	workHandler := &handler.WorkHandler{}
+	workHandler.Init(workService)
+
 	mux.HandleFunc("/{$}", homeHandler.HandleRequest)
+	mux.HandleFunc("/work/{numbering}", workHandler.HandleRequest)
+	mux.HandleFunc("/series/{numbering}", seriesHandler.HandleRequest)
+	mux.HandleFunc("/compose/work/{numbering}", canvasHandler.HandleRequest)
+	mux.HandleFunc("/compose/work", canvasHandler.HandleRequestNew)
+
 	/* mux.HandleFunc("/works", viewWorksHandler)
 
 	mux.HandleFunc("/search/works", searchWorksHandler)
@@ -57,6 +98,9 @@ func main() {
 	mux.HandleFunc("/compose/work/{numbering}", createWorkHandler)
 
 	mux.HandleFunc("/organize/works/by/{name}", organizeWorksHandler) */
+
+	// defering close in GetPgxPool causes "closed pool" error
+	defer pgxPool.Close()
 
 	log.Fatal(http.ListenAndServe(":8080", handler.SubdomainPeriodReplacer(mux)))
 }

@@ -32,7 +32,5 @@ func (h *HomeHandler) handleGet(rw http.ResponseWriter, r *http.Request) {
 		Listings: listings,
 		HasMore:  hasMore,
 	}) */
-	listables := h.homeService.GetNListables(5)
-
-	homeTemplate.Execute(rw, listables)
+	h.homeService.GetTemplateData().ExecuteTemplate(rw)
 }

@@ -1,1 +1,2 @@
-<textarea name="text[{{ .GetId }}]">{{ .Text }}</textarea>
+<!-- TemplateText is passed in -->
+<textarea name="text[{{ $.Text.Id }}]">{{ $.Text.Content }}</textarea>

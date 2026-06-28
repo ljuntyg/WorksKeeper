@@ -32,10 +32,16 @@
   }
 </script>
 
+<!-- TemplateWork is passed in -->
 <h1 class="title">
-  <textarea name="title-text">{{ .GetTitle }}</textarea>
+  <textarea name="title-text">{{ $.Work.Title }}</textarea>
 </h1>
 
+{{ range $.TemplateCanvas.TemplateGroups }}
+{{ .ToEditableHtml }}
+{{ end }}
+
+{{/* 
 {{ $nbrRows := len .ContentRows }}
 {{ with .ContentRows }}
 {{ range . }}
@@ -78,3 +84,4 @@
 {{ end }}
 {{ end }}
 {{ end }}
+*/}}

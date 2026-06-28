@@ -5,14 +5,9 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 )
-
-var homeTemplate *template.Template
-
-func init() {
-	homeTemplate = loadTemplate("resources/home.html")
-}
 
 // Case 1 (localhost):
 // request made to localhost -> Nginx proxies to localhost:8080 with X-Suffix-Subdomain = "" -> localhost:8080 redirects to localhost:8080/works
@@ -66,4 +61,34 @@ func loadTemplate(filePath string) *template.Template {
 	}
 
 	return tmpl
+}
+
+func mustNumberingStringToId(numberingString string) int64 {
+	if numberingString == "" {
+		log.Panicln("no numbering in path")
+	}
+
+	idLen, err := strconv.Atoi(numberingString[:1])
+	if err != nil {
+		log.Panicln("invalid numbering")
+	}
+
+	id, idErr := strconv.Atoi(numberingString[1 : 1+idLen])
+	if idErr != nil {
+		log.Panicln("unable to parse id")
+	}
+
+	return int64(id)
+}
+
+// Assumes all inputs (which should be buttons) with name "action" are of the format
+// "action-name: value"
+func extractActionAndValueFromRequest(r *http.Request) (string, string) {
+	actionString := r.FormValue("action")
+	action, value, found := strings.Cut(actionString, ":")
+	if !found {
+		panic("unexpected action name when handling action")
+	}
+
+	return action, value
 }
