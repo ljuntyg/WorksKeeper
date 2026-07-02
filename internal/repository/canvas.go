@@ -16,10 +16,10 @@ func (cr *CanvasRepository) Init(pgxPool *pgxpool.Pool) {
 }
 
 func (cr *CanvasRepository) GetCanvasByWorkId(workId int64) (entity.Canvas, error) {
-	return selectOneFromTableWhere[entity.Canvas](context.Background(), cr.pgxPool, "canvases",
+	return selectExactlyOneFromTableWhere[entity.Canvas](context.Background(), cr.pgxPool, "canvases",
 		map[string]any{"work_id": workId}, nil, nil)
 }
 
-func (cr *CanvasRepository) GetNewCanvas(args *entity.CanvasArguments) (entity.Canvas, error) {
+func (cr *CanvasRepository) InsertCanvas(args *entity.CanvasArguments) (entity.Canvas, error) {
 	return insertIntoTable[entity.Canvas](context.Background(), cr.pgxPool, "canvases", args.GetNamedArgs())
 }

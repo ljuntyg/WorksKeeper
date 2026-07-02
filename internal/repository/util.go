@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -48,7 +49,7 @@ type orderBy struct {
 }
 
 // buildWhereQuery is shared by selectFromTableWhere and selectOneFromTableWhere.
-func buildWhereQuery(tableName string, equals map[string]any, null *nullFilter, order *orderBy) (string, pgx.NamedArgs, error) {
+func buildWhereQuery(tableName string, equals map[string]any, null *nullFilter, order *orderBy, limit *int64) (string, pgx.NamedArgs, error) {
 	conditions := make([]string, 0, len(equals)+1)
 	args := pgx.NamedArgs{}
 
@@ -81,13 +82,18 @@ func buildWhereQuery(tableName string, equals map[string]any, null *nullFilter, 
 		query += fmt.Sprintf(" ORDER BY %s %s", sanitizedCol, dir)
 	}
 
+	if limit != nil {
+		query += " LIMIT @__limit"
+		args["__limit"] = *limit
+	}
+
 	return query, args, nil
 }
 
 // TODO: what context should callers pass?
 // selectFromTableWhere fetches zero or more rows matching the given conditions.
-func selectFromTableWhere[T any](ctx context.Context, pgxPool *pgxpool.Pool, tableName string, equals map[string]any, null *nullFilter, order *orderBy) ([]T, error) {
-	query, args, err := buildWhereQuery(tableName, equals, null, order)
+func selectFromTableWhere[T any](ctx context.Context, pgxPool *pgxpool.Pool, tableName string, equals map[string]any, null *nullFilter, order *orderBy, limit *int64) ([]T, error) {
+	query, args, err := buildWhereQuery(tableName, equals, null, order, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -104,21 +110,49 @@ func selectFromTableWhere[T any](ctx context.Context, pgxPool *pgxpool.Pool, tab
 
 // TODO: what context should callers pass?
 // selectOneFromTableWhere fetches exactly one row matching the given conditions.
-func selectOneFromTableWhere[T any](ctx context.Context, pgxPool *pgxpool.Pool, tableName string, equals map[string]any, null *nullFilter, order *orderBy) (T, error) {
+func selectExactlyOneFromTableWhere[T any](ctx context.Context, pgxPool *pgxpool.Pool, tableName string, equals map[string]any, null *nullFilter, order *orderBy) (T, error) {
 	var zero T
-	query, args, err := buildWhereQuery(tableName, equals, null, order)
+	one := int64(1)
+	query, args, err := buildWhereQuery(tableName, equals, null, order, &one)
 	if err != nil {
 		return zero, err
 	}
 
 	rows, err := pgxPool.Query(ctx, query, args)
 	if err != nil {
-		log.Printf("selectOneFromTableWhere error: %s", err)
+		log.Println(err)
 		return zero, err
 	}
 
 	defer rows.Close()
 	return pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[T])
+}
+
+func selectOptionalOneFromTableWhere[T any](ctx context.Context, pgxPool *pgxpool.Pool, tableName string, equals map[string]any, null *nullFilter, order *orderBy) (*T, error) {
+	one := int64(1)
+	query, args, err := buildWhereQuery(tableName, equals, null, order, &one)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := pgxPool.Query(ctx, query, args)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	result, err := pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[T])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 // TODO: what context should callers pass?

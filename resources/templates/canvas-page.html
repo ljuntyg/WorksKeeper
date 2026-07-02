@@ -19,20 +19,6 @@
               view work
             </button>
   
-            <menu>
-              <li>
-                <button type="submit" name="action" value="add-text:{{ $.TemplateWork.Work.Id }}">
-                  & new text
-                </button>
-              </li>
-              
-              <li>
-                <button type="submit" name="action" value="add-media:{{ $.TemplateWork.Work.Id }}">
-                  & new media
-                </button>
-              </li>
-            </menu>
-  
             <input type="hidden" name="editing" value="true">
             {{ else }}
             <button type="submit" name="action" value="edit-work:">

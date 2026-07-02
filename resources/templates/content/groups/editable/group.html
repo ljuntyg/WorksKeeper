@@ -1,26 +1,40 @@
 <!-- TemplateGroup is passed in -->
-<div>
-  <section>
+<fieldset>
+  <legend>
+    <button type="submit" name="action" value="delete-group:{{ $.Group.Id }}">
+      ✕
+    </button>
 
-    {{ range $.Templatables }}
-    <fieldset>
-      <legend>
-        <button type="submit" name="action" value="delete-horizontal:">
-          ✕
-        </button>
+    <button type="submit" name="action" value="group-neg-dir:{{ $.Group.Id }}">
+      -
+    </button>
 
-        <button type="submit" name="action" value="horizontal-left:">
-          ←
-        </button>
+    <button type="submit" name="action" value="group-pos-dir:{{ $.Group.Id }}">
+      +
+    </button>
+  </legend>
 
-        <button type="submit" name="action" value="horizontal-right:">
-          →
-        </button>
-      </legend>
+  {{ range $.Templatables }}
+  {{ .ToEditableHtml }}
+  {{ end }}
 
-      {{ .ToEditableHtml }}
-    </fieldset>
-    {{ end }}
+  <menu>
+    <li>
+      <button type="submit" name="action" value="add-text:{{ $.Group.Id }}">
+        & new text
+      </button>
+    </li>
+    
+    <li>
+      <button type="submit" name="action" value="add-media:{{ $.Group.Id }}">
+        & new media
+      </button>
+    </li>
 
-  </section>
-</div>
+    <li>
+      <button type="submit" name="action" value="add-group:{{ $.Group.Id }}">
+        & new group
+      </button>
+    </li>
+  </menu>
+</fieldset>

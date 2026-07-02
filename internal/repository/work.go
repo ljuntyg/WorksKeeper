@@ -16,11 +16,11 @@ func (wr *WorkRepository) Init(pgxPool *pgxpool.Pool) {
 }
 
 func (wr *WorkRepository) GetWork(id int64) (entity.Work, error) {
-	return selectOneFromTableWhere[entity.Work](context.Background(), wr.pgxPool, "works",
+	return selectExactlyOneFromTableWhere[entity.Work](context.Background(), wr.pgxPool, "works",
 		map[string]any{"id": id}, nil, nil)
 }
 
-func (wr *WorkRepository) GetNewWork(args *entity.WorkArguments) (entity.Work, error) {
+func (wr *WorkRepository) InsertWork(args *entity.WorkArguments) (entity.Work, error) {
 	return insertIntoTable[entity.Work](context.Background(), wr.pgxPool, "works", args.GetNamedArgs())
 }
 
@@ -30,5 +30,5 @@ func (wr *WorkRepository) GetNWorks(n int) ([]entity.Work, error) {
 
 func (wr *WorkRepository) GetWorksBySeriesId(id int64) ([]entity.Work, error) {
 	return selectFromTableWhere[entity.Work](context.Background(), wr.pgxPool, "works",
-		map[string]any{"series_id": id}, nil, nil)
+		map[string]any{"series_id": id}, nil, nil, nil)
 }

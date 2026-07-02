@@ -16,11 +16,11 @@ func (sr *SeriesRepository) Init(pgxPool *pgxpool.Pool) {
 }
 
 func (sr *SeriesRepository) GetSeries(id int64) (entity.Series, error) {
-	return selectOneFromTableWhere[entity.Series](context.Background(), sr.pgxPool, "series",
+	return selectExactlyOneFromTableWhere[entity.Series](context.Background(), sr.pgxPool, "series",
 		map[string]any{"id": id}, nil, nil)
 }
 
-func (sr *SeriesRepository) GetNewSeries(args *entity.SeriesArguments) (entity.Series, error) {
+func (sr *SeriesRepository) InsertSeries(args *entity.SeriesArguments) (entity.Series, error) {
 	return insertIntoTable[entity.Series](context.Background(), sr.pgxPool, "series", args.GetNamedArgs())
 }
 
@@ -30,5 +30,5 @@ func (sr *SeriesRepository) GetNSeries(n int) ([]entity.Series, error) {
 
 func (sr *SeriesRepository) GetSeriesBySeriesId(id int64) ([]entity.Series, error) {
 	return selectFromTableWhere[entity.Series](context.Background(), sr.pgxPool, "series",
-		map[string]any{"parent_id": id}, nil, nil)
+		map[string]any{"parent_id": id}, nil, nil, nil)
 }
