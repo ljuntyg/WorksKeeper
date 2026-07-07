@@ -25,6 +25,18 @@ func main() {
 	/* cssFileServer := http.FileServer(http.Dir("./resources/static/"))
 	mux.Handle("/static/", http.StripPrefix("/static/", cssFileServer)) */
 
+	imageFs := http.FileServer(http.Dir("./resources/media/images"))
+	mux.Handle("/media/images/", http.StripPrefix("/media/images/", imageFs))
+
+	soundFs := http.FileServer(http.Dir("./resources/media/sounds"))
+	mux.Handle("/media/sounds/", http.StripPrefix("/media/sounds/", soundFs))
+
+	textFs := http.FileServer(http.Dir("./resources/media/texts"))
+	mux.Handle("/media/texts/", http.StripPrefix("/media/texts/", textFs))
+
+	videoF := http.FileServer(http.Dir("./resources/media/videos"))
+	mux.Handle("/media/videos/", http.StripPrefix("/media/videos/", videoF))
+
 	pgxPool := repository.GetPgxPool(
 		os.Getenv("PGHOST"),
 		os.Getenv("PGDATABASE"),
@@ -34,40 +46,43 @@ func main() {
 	)
 
 	canvasRepo := &repository.CanvasRepository{}
-	canvasRepo.Init(pgxPool)
-
 	captionRepo := &repository.CaptionRepository{}
-	captionRepo.Init(pgxPool)
-
+	collectionRepo := &repository.CollectionRepository{}
+	contentRepo := &repository.ContentRepository{}
 	groupRepo := &repository.GroupRepository{}
-	groupRepo.Init(pgxPool)
-
+	listingRepo := &repository.ListingRepository{}
 	mediaRepo := &repository.MediaRepository{}
-	mediaRepo.Init(pgxPool)
-
 	sourceRepo := &repository.SourceRepository{}
-	sourceRepo.Init(pgxPool)
-
 	textRepo := &repository.TextRepository{}
-	textRepo.Init(pgxPool)
-
 	workRepo := &repository.WorkRepository{}
-	workRepo.Init(pgxPool)
-
 	seriesRepo := &repository.SeriesRepository{}
-	seriesRepo.Init(pgxPool)
+
+	repoCollection := &repository.RepositoryCollection{}
+	repoCollection.Init(
+		pgxPool,
+		canvasRepo,
+		captionRepo,
+		collectionRepo,
+		contentRepo,
+		groupRepo,
+		listingRepo,
+		mediaRepo,
+		seriesRepo,
+		sourceRepo,
+		textRepo,
+		workRepo)
 
 	canvasService := &service.CanvasService{}
-	canvasService.Init(canvasRepo, captionRepo, groupRepo, mediaRepo, sourceRepo, textRepo, workRepo)
+	canvasService.Init(repoCollection)
 
 	homeService := &service.HomeService{}
-	homeService.Init(seriesRepo, workRepo)
+	homeService.Init(repoCollection)
 
 	seriesService := &service.SeriesService{}
-	seriesService.Init(seriesRepo, workRepo)
+	seriesService.Init(repoCollection)
 
 	workService := &service.WorkService{}
-	workService.Init(canvasRepo, captionRepo, groupRepo, mediaRepo, sourceRepo, textRepo, workRepo)
+	workService.Init(repoCollection)
 
 	canvasHandler := &handler.CanvasHandler{}
 	canvasHandler.Init(canvasService)

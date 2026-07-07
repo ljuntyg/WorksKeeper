@@ -1,20 +1,10 @@
-<!-- MediableCaption is passed in -->
-{{ if .Caption }}
+<!-- TemplateCaption is passed in -->
 <fieldset>
 	<legend>
-		<button type="submit" name="action" value="delete-caption:{{ .Media.GetId }}">
+		<button type="submit" name="action" value="delete-caption:{{ $.Caption.Id }}">
 			✕
 		</button>
 	</legend>
 
-	<textarea name="caption[{{ .Media.GetId }}]">{{ .Caption.Text }}</textarea>
+	<textarea name="caption[{{ $.Caption.Id }}]">{{ $.Caption.Content }}</textarea>
 </fieldset>
-{{ else }}
-<menu>
-	<li>
-		<button type="submit" name="action" value="add-caption:{{ .Media.GetId }}">
-			& new caption
-		</button>
-	</li>
-</menu>
-{{ end }}

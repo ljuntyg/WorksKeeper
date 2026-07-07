@@ -1,0 +1,30 @@
+<!-- TemplateMedia is passed in -->
+<figure>
+  {{ if eq $.Media.MediaType "text" }}
+
+  <img src="{{ index $.Sources 0 }}" alt="Image">
+
+  {{ else if eq $.Media.MediaType "video" }}
+
+  <video controls loop>
+		{{ range $.Sources }}
+		<source src="{{ .Link }}">
+		{{ end }}
+		Your browser doesn't support this video.
+	</video>
+
+  {{ else if eq $.Media.MediaType "sound" }}
+
+  <audio controls loop>
+		{{ range .GetSources }}
+		<source src="{{ . }}">
+		{{ end }}
+		Your browser doesn't support this audio.
+	</audio>
+
+  {{ end }}
+
+  {{ if $.TemplateCaption }}
+  {{ $.TemplateCaption.ToHtml }}
+  {{ end }}
+</figure>

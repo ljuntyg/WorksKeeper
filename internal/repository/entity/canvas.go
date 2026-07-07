@@ -7,23 +7,19 @@ import (
 )
 
 type Canvas struct {
-	Id       int64     `db:"id"`
-	WorkId   int64     `db:"work_id"`
-	LastEdit time.Time `db:"last_edit"`
+	Id          int64     `db:"id"`
+	RootGroupId int64     `db:"root_group_id"`
+	LastEdit    time.Time `db:"last_edit"`
 }
 
 type CanvasArguments struct {
-	WorkId   int64
-	LastEdit time.Time
-}
-
-func (c *Canvas) GetName(prefix string) string {
-	return prefix + "canvas"
+	RootGroupId int64
+	LastEdit    time.Time
 }
 
 func (ca *CanvasArguments) GetNamedArgs() pgx.NamedArgs {
 	return pgx.NamedArgs{
-		"work_id":   ca.WorkId,
-		"last_edit": ca.LastEdit,
+		"root_group_id": ca.RootGroupId,
+		"last_edit":     ca.LastEdit,
 	}
 }

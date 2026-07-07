@@ -6,19 +6,18 @@ import (
 )
 
 type SeriesService struct {
-	seriesRepo *repository.SeriesRepository
-	workRepo   *repository.WorkRepository
+	repos *repository.RepositoryCollection
 }
 
-func (s *SeriesService) Init(
-	seriesRepo *repository.SeriesRepository,
-	workRepo *repository.WorkRepository) {
-	s.seriesRepo = seriesRepo
-	s.workRepo = workRepo
+func (s *SeriesService) Init(repos *repository.RepositoryCollection) {
+	s.repos = repos
 }
 
 func (s *SeriesService) GetTemplateData(seriesId int64) *template.SeriesData {
+	templateSeries := mustBuildTemplateSeriesShallow(seriesId, s.repos)
+	mustAttachTemplateListings(templateSeries, s.repos)
+
 	return &template.SeriesData{
-		TemplateSeries: buildTemplateSeries(seriesId, s.seriesRepo, s.workRepo),
+		TemplateSeries: templateSeries,
 	}
 }

@@ -3,29 +3,28 @@ package service
 import (
 	"WorksKeeper/internal/repository"
 	"WorksKeeper/internal/template"
-	"WorksKeeper/internal/template/frontend"
 )
 
 type HomeService struct {
-	seriesRepo *repository.SeriesRepository
-	workRepo   *repository.WorkRepository
+	repos *repository.RepositoryCollection
 }
 
-func (hs *HomeService) Init(
-	seriesRepo *repository.SeriesRepository,
-	workRepo *repository.WorkRepository) {
-	hs.seriesRepo = seriesRepo
-	hs.workRepo = workRepo
+func (hs *HomeService) Init(repos *repository.RepositoryCollection) {
+	hs.repos = repos
 }
 
-func (hs *HomeService) GetTemplateData() *template.HomeData {
+func (hs *HomeService) GetTemplateData() template.Executable {
+	templateCollection := mustBuildTemplateCollectionShallow(1, hs.repos)
+	templateSeries := mustAttachTemplateSeries(templateCollection, hs.repos)
+	mustAttachTemplateListings(templateSeries, hs.repos)
+
 	return &template.HomeData{
-		Listables: hs.getNListables(5),
-		HasMore:   false,
+		TemplateCollection: templateCollection,
+		HasMore:            false,
 	}
 }
 
-func (hs *HomeService) getNListables(n int) []frontend.Listable {
+/* func (hs *HomeService) getNListables(n int) []frontend.Listable {
 	nbrWorks := n / 2
 	nbrSeries := n - nbrWorks
 
@@ -50,3 +49,4 @@ func (hs *HomeService) getNListables(n int) []frontend.Listable {
 
 	return listables
 }
+*/

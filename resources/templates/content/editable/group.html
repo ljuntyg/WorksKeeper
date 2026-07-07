@@ -1,0 +1,24 @@
+<!-- TemplateGroup is passed in -->
+{{ range $.TemplateContents }}
+{{ .ToEditableHtml }}
+{{ end }}
+
+<menu>
+  <li>
+    <button type="submit" name="action" value="add-text:{{ $.Group.Id }}">
+      & new text
+    </button>
+  </li>
+  
+  <li>
+    <button type="submit" name="action" value="add-media:{{ $.Group.Id }}">
+      & new media
+    </button>
+  </li>
+
+  <li>
+    <button type="submit" name="action" value="add-group:{{ $.Group.Id }}">
+      & new group
+    </button>
+  </li>
+</menu>

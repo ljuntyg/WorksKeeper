@@ -1,4 +1,4 @@
-<!-- MediableCaption is passed in -->
-{{ with .Media.GetCaption }}
-<figcaption>{{ .Text }}</figcaption>
+<!-- TemplateCaption is passed in -->
+{{ with $.Caption }}
+<figcaption>{{ .Content }}</figcaption>
 {{ end }}

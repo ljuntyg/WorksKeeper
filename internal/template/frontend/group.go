@@ -7,16 +7,16 @@ import (
 )
 
 type TemplateGroup struct {
-	Group        *entity.Group
-	Templatables []Templatable
+	Group            *entity.Group
+	TemplateContents []Templatable
 }
 
 func (tg *TemplateGroup) GetName(prefix string) string {
-	return tg.Group.GetName(prefix)
+	return prefix + "group"
 }
 
 func (tg *TemplateGroup) GetPath(fileName string) string {
-	return fmt.Sprintf("./resources/templates/content/groups/%s.html", fileName)
+	return fmt.Sprintf("./resources/templates/content/%s.html", fileName)
 }
 
 func (tg *TemplateGroup) ToEditableHtml() template.HTML {

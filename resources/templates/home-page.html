@@ -1,67 +1,33 @@
 <!-- HomeData is passed in -->
 <!doctype html>
 <html>
-  <head>
-    <!-- <link rel="stylesheet" href="/static/home.css">
-    <link rel="stylesheet" href="/static/style.css"> -->
-  </head>
+  <!-- <head>
+    <link rel="stylesheet" href="/static/home.css">
+    <link rel="stylesheet" href="/static/style.css">
+  </head> -->
 
   <body>  
     <form method="post">
-      <div class="main-container">
+      <nav>
+        <a href="/compose/work">create</a>
+      </nav>
 
-        <nav class="nav-container">
-          <a href="/compose/work">create</a>
-        </nav>
-  
-        <main class="table-container">
-          <table>
-            <tr>
-              <th>length</th>
-              <th>title</th>
-              <!-- <th>about</th> -->
-            </tr>
-    
-            {{ range .Listables }}
-            {{ $numberingString := .GetNumberingUrlString }}
-            <tr>
-              {{/* <td>{{ formatTime .GetTimeRequiredMinutes }}</td> */}}
-              <td>{{ .GetTimeRequiredString }}</td>
-              <td>
-                <a href="{{ $numberingString }}">{{ .GetTitle }}</a>
-              </td>
-              <!-- <td>
-                <details>
-                  <summary></summary>
-                  TODO: Description/Summary
-                  TODO: Remember if open/closed on post
-                </details>
-              </td> -->
-    
-              <input type="hidden" name="listing-numberings" value="{{ $numberingString }}">
-            </tr>
-            {{ end }}
-          </table>
-        </main>
-  
-  
-        <section class="options-container">
-          {{ if and (lt (len .Listings) 15) (eq .HasMore true) }}
-          <button type="submit" name="action" value="more-works:">
-            & more
-          </button>
-          {{ else }}
-          {{ if eq .HasMore true }}
-          <a href="/search/works">search</a>
-          {{ else }}
-          that's all, for now
-          {{ end }}
-          {{ end }}
-        </section>
+      {{ $.TemplateCollection.ToHtml }}
 
-      </div>
+      <section>
+        {{ if and (lt (len .Listings) 15) (eq .HasMore true) }}
+        <button type="submit" name="action" value="more-works:">
+          & more
+        </button>
+        {{ else }}
+        {{ if eq .HasMore true }}
+        <a href="/search/works">search</a>
+        {{ else }}
+        that's all, for now
+        {{ end }}
+        {{ end }}
+      </section>
     </form>
-    
     
     <script>
       document.querySelector('form').addEventListener('submit', async (e) => {

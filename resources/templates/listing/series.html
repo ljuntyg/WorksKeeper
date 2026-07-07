@@ -1,0 +1,11 @@
+<!-- TemplateSeries is passed in -->
+<table>
+  <tr>
+    <th>length</th>
+    <th>title</th>
+  </tr>
+
+  {{ range $.TemplateListings }}
+  {{ .ToHtml }}
+  {{ end }}
+</table>

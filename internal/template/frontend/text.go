@@ -11,7 +11,7 @@ type TemplateText struct {
 }
 
 func (tt *TemplateText) GetName(prefix string) string {
-	return tt.Text.GetName(prefix)
+	return prefix + "text"
 }
 
 func (tt *TemplateText) GetPath(fileName string) string {

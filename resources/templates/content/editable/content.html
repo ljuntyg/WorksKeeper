@@ -1,0 +1,18 @@
+<!-- TemplateContent is passed in -->
+<fieldset>
+  <legend>
+    <button type="submit" name="action" value="delete-content:{{ $.Content.Id }}">
+      ✕
+    </button>
+
+    <button type="submit" name="action" value="content-decrease-position:{{ $.Content.Id }}">
+      -
+    </button>
+
+    <button type="submit" name="action" value="content-increase-position:{{ $.Content.Id }}">
+      +
+    </button>
+  </legend>
+
+  {{ $.TemplateGroupOrTextOrMedia.ToEditableHtml }}
+</fieldset>

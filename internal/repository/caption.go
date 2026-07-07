@@ -1,11 +1,21 @@
 package repository
 
-import "github.com/jackc/pgx/v5/pgxpool"
+import (
+	"WorksKeeper/internal/repository/entity"
+	"context"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
 
 type CaptionRepository struct {
 	pgxPool *pgxpool.Pool
 }
 
-func (cr *CaptionRepository) Init(pgxPool *pgxpool.Pool) {
+func (cr *CaptionRepository) init(pgxPool *pgxpool.Pool) {
 	cr.pgxPool = pgxPool
+}
+
+func (cr *CaptionRepository) GetCaption(id int64) (entity.Caption, error) {
+	return selectExactlyOneFromTableWhere[entity.Caption](context.Background(), cr.pgxPool, "captions",
+		map[string]any{"id": id}, nil, nil)
 }

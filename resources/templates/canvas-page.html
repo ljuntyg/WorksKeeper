@@ -1,45 +1,41 @@
 <!-- CanvasData is passed in-->
 <!doctype html>
 <html>
-  <head>
-    <!-- <link rel="stylesheet" href="/static/canvas.css">
+  <!-- <head>
+    <link rel="stylesheet" href="/static/canvas.css">
     <link rel="stylesheet" href="/static/work.css">
-    <link rel="stylesheet" href="/static/style.css"> -->
-  </head>
+    <link rel="stylesheet" href="/static/style.css">
+  </head> -->
 
   <body>
     <form method="post" enctype="multipart/form-data">
-      
-      <div class="canvas-main-container">
-        <aside class="tools-container">
-          <fieldset>
-            
-            {{ if eq $.IsEditing true }}
-            <button type="submit" name="action" value="view-work:">
-              view work
-            </button>
-  
-            <input type="hidden" name="editing" value="true">
-            {{ else }}
-            <button type="submit" name="action" value="edit-work:">
-              compose work
-            </button>
-  
-            <input type="hidden" name="editing" value="false">
-            {{ end }}
-  
-          </fieldset>
-        </aside>
-  
-        <main class="canvas-container">
+      <aside>
+        <fieldset>
+          
           {{ if eq $.IsEditing true }}
-          {{ $.TemplateWork.ToEditableHtml }}
+          <button type="submit" name="action" value="view-work:">
+            view work
+          </button>
+
+          <input type="hidden" name="editing" value="true">
           {{ else }}
-          {{ $.TemplateWork.ToHtml }}
+          <button type="submit" name="action" value="edit-work:">
+            compose work
+          </button>
+
+          <input type="hidden" name="editing" value="false">
           {{ end }}
-        </main>
-      </div>
-  
+
+        </fieldset>
+      </aside>
+
+      <main class="canvas-container">
+        {{ if eq $.IsEditing true }}
+        {{ $.TemplateWork.ToEditableHtml }}
+        {{ else }}
+        {{ $.TemplateWork.ToHtml }}
+        {{ end }}
+      </main>
     </form>
 
     <script>

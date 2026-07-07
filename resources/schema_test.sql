@@ -1,54 +1,82 @@
+DROP TABLE IF EXISTS collections CASCADE;
 DROP TABLE IF EXISTS works CASCADE;
 DROP TABLE IF EXISTS series CASCADE;
+DROP TABLE IF EXISTS listings CASCADE;
 DROP TABLE IF EXISTS canvases CASCADE;
 DROP TABLE IF EXISTS groups CASCADE;
+DROP TABLE IF EXISTS contents CASCADE;
 DROP TABLE IF EXISTS texts CASCADE;
 DROP TABLE IF EXISTS media CASCADE;
 DROP TABLE IF EXISTS sources CASCADE;
 DROP TABLE IF EXISTS captions CASCADE;
 
+DROP TYPE IF EXISTS l_type CASCADE;
+DROP TYPE IF EXISTS c_type CASCADE;
 DROP TYPE IF EXISTS m_type CASCADE;
-CREATE TYPE m_type AS ENUM ('sound', 'video', 'image');
+
+CREATE TYPE l_type AS ENUM ('series', 'work');
+CREATE TYPE c_type AS ENUM ('group', 'text', 'media');
+CREATE TYPE m_type AS ENUM ('sound', 'video', 'image', 'empty');
+
+CREATE TABLE collections (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    root_series_id BIGINT UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
 
 CREATE TABLE works (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    series_id BIGINT,
+    listing_id BIGINT UNIQUE NOT NULL,
+    canvas_id BIGINT UNIQUE NOT NULL,
     title VARCHAR(4096) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
 CREATE TABLE series (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    parent_id BIGINT,
+    listing_id BIGINT UNIQUE,
     title VARCHAR(4096) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
+CREATE TABLE listings (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    parent_series_id BIGINT NOT NULL,
+    position NUMERIC NOT NULL,
+    listing_type L_TYPE NOT NULL,
+    UNIQUE (parent_series_id, position)
+);
+
 CREATE TABLE canvases (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    work_id BIGINT NOT NULL,
+    root_group_id BIGINT UNIQUE NOT NULL,
     last_edit TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
 CREATE TABLE groups (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    parent_id BIGINT,
-    canvas_id BIGINT NOT NULL,
-    idx INTEGER NOT NULL,
+    content_id BIGINT UNIQUE,
     swap_direction BOOLEAN DEFAULT FALSE NOT NULL
+);
+
+CREATE TABLE contents (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    parent_group_id BIGINT NOT NULL,
+    position NUMERIC NOT NULL,
+    content_type C_TYPE NOT NULL,
+    UNIQUE (parent_group_id, position)
 );
 
 CREATE TABLE texts (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    group_id BIGINT NOT NULL,
-    idx INTEGER NOT NULL,
+    content_id BIGINT UNIQUE NOT NULL,
     content VARCHAR(4194304)
 );
 
 CREATE TABLE media (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    group_id BIGINT NOT NULL,
-    idx INTEGER NOT NULL,
+    content_id BIGINT UNIQUE NOT NULL,
+    caption_id BIGINT UNIQUE,
     media_type M_TYPE NOT NULL
 );
 
@@ -60,37 +88,48 @@ CREATE TABLE sources (
 
 CREATE TABLE captions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    media_id BIGINT NOT NULL,
     content VARCHAR(4194304)
 );
 
+ALTER TABLE collections
+ADD CONSTRAINT collections_root_series_fk
+FOREIGN KEY (root_series_id) REFERENCES series(id);
+
 ALTER TABLE works
-ADD CONSTRAINT works_series_fk
-FOREIGN KEY (series_id) REFERENCES series(id);
+ADD CONSTRAINT works_listing_fk
+FOREIGN KEY (listing_id) REFERENCES listings(id);
 
-ALTER TABLE series
-ADD CONSTRAINT series_parent_fk
-FOREIGN KEY (parent_id) REFERENCES series(id);
-
-ALTER TABLE canvases
-ADD CONSTRAINT canvases_work_fk
-FOREIGN KEY (work_id) REFERENCES works(id);
-
-ALTER TABLE groups
-ADD CONSTRAINT groups_parent_fk
-FOREIGN KEY (parent_id) REFERENCES groups(id);
-
-ALTER TABLE groups
-ADD CONSTRAINT groups_canvas_fk
+ALTER TABLE works
+ADD CONSTRAINT works_canvas_fk
 FOREIGN KEY (canvas_id) REFERENCES canvases(id);
 
+ALTER TABLE series
+ADD CONSTRAINT series_listing_fk
+FOREIGN KEY (listing_id) REFERENCES listings(id);
+
+ALTER TABLE listings
+ADD CONSTRAINT listings_parent_series_fk
+FOREIGN KEY (parent_series_id) REFERENCES series(id);
+
+ALTER TABLE canvases
+ADD CONSTRAINT canvases_root_group_fk
+FOREIGN KEY (root_group_id) REFERENCES groups(id);
+
+ALTER TABLE groups
+ADD CONSTRAINT groups_content_fk
+FOREIGN KEY (content_id) REFERENCES contents(id);
+
+ALTER TABLE contents
+ADD CONSTRAINT contents_parent_group_fk
+FOREIGN KEY (parent_group_id) REFERENCES groups(id);
+
 ALTER TABLE texts
-ADD CONSTRAINT texts_group_fk
-FOREIGN KEY (group_id) REFERENCES groups(id);
+ADD CONSTRAINT texts_content_fk
+FOREIGN KEY (content_id) REFERENCES contents(id);
 
 ALTER TABLE media
-ADD CONSTRAINT media_group_fk
-FOREIGN KEY (group_id) REFERENCES groups(id);
+ADD CONSTRAINT media_caption_fk
+FOREIGN KEY (caption_id) REFERENCES captions(id);
 
 ALTER TABLE sources
 ADD CONSTRAINT sources_media_fk
@@ -100,23 +139,88 @@ ALTER TABLE captions
 ADD CONSTRAINT captions_media_fk
 FOREIGN KEY (media_id) REFERENCES media(id);
 
-INSERT INTO series (title, created_at) VALUES('Series #1', NOW());
-INSERT INTO series (parent_id, title, created_at) VALUES(1, 'Series #2 (nested)', NOW());
-INSERT INTO series (title, created_at) VALUES('Series #3', NOW());
+-- ===== mock data =====
 
-INSERT INTO works (series_id, title, created_at) VALUES(2, 'Work #1 (nested)', NOW());
-INSERT INTO works (title, created_at) VALUES('Work #2', NOW());
+-- Root series for the only collection
+INSERT INTO series (title, created_at) VALUES ('Series #1 (root)', NOW());          -- series.id 1, listing_id NULL
 
-INSERT INTO canvases (work_id, last_edit) VALUES(1, NOW());
+-- Nested series
+INSERT INTO series (title, created_at) VALUES ('Series #2 (nested)', NOW());        -- series.id 2
 
-INSERT INTO groups (canvas_id, idx) VALUES(1, 0);
-INSERT INTO groups (parent_id, canvas_id, idx) VALUES(1, 1, 0);
+INSERT INTO listings (parent_series_id, position, listing_type)
+VALUES (1, 1.0, 'series'); -- listing.id 1: Series #2 under Series #1
 
-INSERT INTO texts (group_id, idx, content) VALUES(2, 0, 'Text #1');
-INSERT INTO texts (group_id, idx, content) VALUES(1, 1, 'Text #2');
+UPDATE series SET listing_id = 1 WHERE id = 2;
 
-INSERT INTO media (group_id, idx, media_type) VALUES(2, 1, 'video');
+-- Another series in the same collection
+INSERT INTO series (title, created_at) VALUES ('Series #3', NOW());                 -- series.id 3
 
-INSERT INTO sources (media_id, link) VALUES(1, 'http://localhost:8080/media/video/introsong.mp4');
+INSERT INTO listings (parent_series_id, position, listing_type)
+VALUES (1, 2.0, 'series'); -- listing.id 2: Series #3 under Series #1
 
-INSERT INTO captions (media_id, content) VALUES(1, 'Caption #1');
+UPDATE series SET listing_id = 2 WHERE id = 3;
+
+-- Works
+INSERT INTO listings (parent_series_id, position, listing_type)
+VALUES (2, 1.0, 'work');   -- listing.id 3: Work #1 under Series #2
+
+INSERT INTO listings (parent_series_id, position, listing_type)
+VALUES (1, 3.0, 'work');   -- listing.id 4: Work #2 under Series #1
+
+INSERT INTO groups (content_id) VALUES (NULL); -- group.id 1: root group for Work #1
+
+INSERT INTO groups (content_id) VALUES (NULL); -- group.id 2: root group for Work #2
+
+INSERT INTO canvases (root_group_id) VALUES (1); -- canvas.id 1
+
+INSERT INTO canvases (root_group_id) VALUES (2); -- canvas.id 2
+
+INSERT INTO works (listing_id, canvas_id, title)
+VALUES (3, 1, 'Work #1 (nested)');
+
+INSERT INTO works (listing_id, canvas_id, title)
+VALUES (4, 2, 'Work #2');
+
+-- Single collection
+INSERT INTO collections (root_series_id) VALUES (1);
+
+-- Canvas #1 contents: a nested group + a top-level text
+
+INSERT INTO contents (parent_group_id, position, content_type)
+VALUES (1, 1.0, 'group'); -- content.id 1
+
+INSERT INTO groups (content_id) VALUES (1); -- group.id 3
+
+INSERT INTO contents (parent_group_id, position, content_type)
+VALUES (1, 2.0, 'text'); -- content.id 2
+
+INSERT INTO texts (content_id, content)
+VALUES (2, 'Text #2');
+
+-- Inside nested group 3: a text, then a video with source + caption
+
+INSERT INTO contents (parent_group_id, position, content_type)
+VALUES (3, 1.0, 'text'); -- content.id 3
+
+INSERT INTO texts (content_id, content)
+VALUES (3, 'Text #1');
+
+INSERT INTO contents (parent_group_id, position, content_type)
+VALUES (3, 2.0, 'media'); -- content.id 4
+
+INSERT INTO captions (content)
+VALUES ('Caption #1');
+
+INSERT INTO media (content_id, caption_id, media_type)
+VALUES (4, 1, 'video');
+
+INSERT INTO sources (media_id, link)
+VALUES (1, 'http://localhost:8080/media/videos/introsong.mp4');
+
+-- Canvas #2 contents: a single top-level text
+
+INSERT INTO contents (parent_group_id, position, content_type)
+VALUES (2, 1.0, 'text'); -- content.id 5
+
+INSERT INTO texts (content_id, content)
+VALUES (5, 'Text #3');

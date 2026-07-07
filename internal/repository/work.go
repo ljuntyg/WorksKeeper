@@ -4,6 +4,7 @@ import (
 	"WorksKeeper/internal/repository/entity"
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -11,7 +12,7 @@ type WorkRepository struct {
 	pgxPool *pgxpool.Pool
 }
 
-func (wr *WorkRepository) Init(pgxPool *pgxpool.Pool) {
+func (wr *WorkRepository) init(pgxPool *pgxpool.Pool) {
 	wr.pgxPool = pgxPool
 }
 
@@ -24,11 +25,15 @@ func (wr *WorkRepository) InsertWork(args *entity.WorkArguments) (entity.Work, e
 	return insertIntoTable[entity.Work](context.Background(), wr.pgxPool, "works", args.GetNamedArgs())
 }
 
+func (wr *WorkRepository) InsertWorkTx(tx pgx.Tx, args *entity.WorkArguments) (entity.Work, error) {
+	return insertIntoTable[entity.Work](context.Background(), tx, "works", args.GetNamedArgs())
+}
+
 func (wr *WorkRepository) GetNWorks(n int) ([]entity.Work, error) {
 	return selectAllFromTableLimitN[entity.Work](context.Background(), wr.pgxPool, "works", int64(n))
 }
 
-func (wr *WorkRepository) GetWorksBySeriesId(id int64) ([]entity.Work, error) {
-	return selectFromTableWhere[entity.Work](context.Background(), wr.pgxPool, "works",
-		map[string]any{"series_id": id}, nil, nil, nil)
+func (wr *WorkRepository) GetWorkByListingId(listingId int64) (entity.Work, error) {
+	return selectExactlyOneFromTableWhere[entity.Work](context.Background(), wr.pgxPool, "works",
+		map[string]any{"listing_id": listingId}, nil, nil)
 }

@@ -2,135 +2,162 @@ package service
 
 import (
 	"WorksKeeper/internal/repository"
-	"WorksKeeper/internal/repository/entity"
 	"WorksKeeper/internal/template"
+	"WorksKeeper/internal/template/frontend"
+	"context"
 	"log"
-	"time"
 )
 
 type CanvasService struct {
-	canvasRepo  *repository.CanvasRepository
-	captionRepo *repository.CaptionRepository
-	groupRepo   *repository.GroupRepository
-	mediaRepo   *repository.MediaRepository
-	sourceRepo  *repository.SourceRepository
-	textRepo    *repository.TextRepository
-	workRepo    *repository.WorkRepository
+	repos *repository.RepositoryCollection
 }
 
-func (cs *CanvasService) Init(
-	canvasRepo *repository.CanvasRepository,
-	captionRepo *repository.CaptionRepository,
-	groupRepo *repository.GroupRepository,
-	mediaRepo *repository.MediaRepository,
-	sourceRepo *repository.SourceRepository,
-	textRepo *repository.TextRepository,
-	workRepo *repository.WorkRepository,
-) {
-	cs.canvasRepo = canvasRepo
-	cs.captionRepo = captionRepo
-	cs.groupRepo = groupRepo
-	cs.mediaRepo = mediaRepo
-	cs.sourceRepo = sourceRepo
-	cs.textRepo = textRepo
-	cs.workRepo = workRepo
+func (cs *CanvasService) Init(repos *repository.RepositoryCollection) {
+	cs.repos = repos
 }
 
-func (cs *CanvasService) GetTemplateData(workId int64, editing bool) *template.CanvasData {
+func (cs *CanvasService) GetTemplateData(workId int64, editing bool) template.Executable {
+	templateWork := mustBuildTemplateWorkShallow(workId, cs.repos)
+	mustFillTemplateWork(templateWork, cs.repos)
+
 	return &template.CanvasData{
-		TemplateWork: buildTemplateWork(
-			workId,
-			cs.canvasRepo,
-			cs.groupRepo,
-			cs.textRepo,
-			cs.workRepo),
-		IsEditing: editing,
+		TemplateWork: templateWork,
+		IsEditing:    editing,
 	}
 }
 
-func (cs *CanvasService) GetNewWork() *entity.Work {
-	work, err := cs.workRepo.InsertWork(&entity.WorkArguments{
-		Title: "Untitled Work",
-	})
-
+func (cs *CanvasService) MustInsertNewWorkInBaseCollection() *frontend.TemplateWork {
+	collection, err := cs.repos.CollectionRepo.GetCollection(1)
 	if err != nil {
 		log.Println(err)
-		panic("unexpected error creating new Work")
+		panic("unexpected error getting Collection")
 	}
 
-	canvas, err := cs.canvasRepo.InsertCanvas(&entity.CanvasArguments{
-		WorkId:   work.Id,
-		LastEdit: time.Now(),
-	})
-
-	if err != nil {
-		log.Println(err)
-		panic("unexpected error creating new Canvas")
-	}
-
-	_, err = cs.groupRepo.InsertGroup(&entity.GroupArguments{
-		ParentId:      nil,
-		CanvasId:      canvas.Id,
-		Idx:           0,
-		SwapDirection: false,
-	})
-
-	if err != nil {
-		log.Println(err)
-		panic("unexpected error creating new Group")
-	}
-
-	return &work
+	return cs.mustInsertNewWork(collection.RootSeriesId)
 }
 
-func (cs *CanvasService) GetNewGroupForGroup(workId int64, groupId int64) {
-	canvas, err := cs.canvasRepo.GetCanvasByWorkId(workId)
-	if err != nil {
-		panic("unexpected error getting Canvas")
+func (cs *CanvasService) MustInsertNewTextInGroup(groupId int64) *frontend.TemplateText {
+	tx := cs.repos.MustBegin(context.Background())
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback(context.Background())
+			log.Println(r)
+			panic("unexpected error inserting new Text; rolled back")
+		}
+	}()
+
+	templateContent := mustInsertNewTemplateTextContent(tx, groupId, cs.repos)
+
+	if err := tx.Commit(context.Background()); err != nil {
+		log.Println(err)
+		panic("unexpected error committing new Text")
 	}
 
-	group, err := cs.groupRepo.GetGroup(groupId)
-	if err != nil {
-		panic("unexpected error getting Group")
+	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateText)
+}
+
+func (cs *CanvasService) MustInsertNewMediaInGroup(groupId int64) *frontend.TemplateMedia {
+	tx := cs.repos.MustBegin(context.Background())
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback(context.Background())
+			log.Println(r)
+			panic("unexpected error inserting new Media; rolled back")
+		}
+	}()
+
+	templateContent := mustInsertNewTemplateMediaContent(tx, groupId, cs.repos)
+
+	if err := tx.Commit(context.Background()); err != nil {
+		log.Println(err)
+		panic("unexpected error committing new Media")
 	}
 
-	latestGroupText, err := cs.textRepo.GetTextOrNilByGroupIdOrderByIdxDescending(groupId)
-	if err != nil {
-		panic("unexpected error getting latest Group Text")
+	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateMedia)
+}
+
+func (cs *CanvasService) MustInsertNewGroupInGroup(groupId int64) *frontend.TemplateGroup {
+	tx := cs.repos.MustBegin(context.Background())
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback(context.Background())
+			log.Println(r)
+			panic("unexpected error inserting new Group; rolled back")
+		}
+	}()
+
+	templateContent := mustInsertNewTemplateGroupContent(tx, groupId, cs.repos)
+
+	if err := tx.Commit(context.Background()); err != nil {
+		log.Println(err)
+		panic("unexpected error committing new Group")
 	}
 
-	latestGroupMedia, err := cs.mediaRepo.GetMediaOrNilByGroupIdOrderByIdxDescending(groupId)
-	if err != nil {
-		panic("unexpected error getting latest Group Media")
+	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateGroup)
+}
+
+func (cs *CanvasService) MustIncreaseContentPosition(contentId int64) {
+	tx := cs.repos.MustBegin(context.Background())
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback(context.Background())
+			log.Println(r)
+			panic("unexpected error increasing Content position; rolled back")
+		}
+	}()
+
+	if _, err := cs.repos.ContentRepo.IncreaseContentPositionTx(tx, contentId); err != nil {
+		log.Println(err)
+		panic("unexpected error increasing Content position")
 	}
 
-	latestGroupGroup, err := cs.groupRepo.GetGroupOrNilByParentIdOrderByIdxDescending(groupId)
-	if err != nil {
-		panic("unexpected error getting latest Group Group")
+	if err := tx.Commit(context.Background()); err != nil {
+		log.Println(err)
+		panic("unexpected error increasing Content position")
+	}
+}
+
+func (cs *CanvasService) MustDecreaseContentPosition(contentId int64) {
+	tx := cs.repos.MustBegin(context.Background())
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback(context.Background())
+			log.Println(r)
+			panic("unexpected error decreasing Content position; rolled back")
+		}
+	}()
+
+	if _, err := cs.repos.ContentRepo.DecreaseContentPositionTx(tx, contentId); err != nil {
+		log.Println(err)
+		panic("unexpected error decreasing Content position")
 	}
 
-	maxTextIdx, maxMediaIdx, maxGroupIdx := int32(0), int32(0), int32(0)
-	if latestGroupText != nil {
-		maxTextIdx = int32(latestGroupText.Idx)
+	if err := tx.Commit(context.Background()); err != nil {
+		log.Println(err)
+		panic("unexpected error decreasing Content position")
+	}
+}
+
+func (cs *CanvasService) mustInsertNewWork(seriesId int64) *frontend.TemplateWork {
+	tx := cs.repos.MustBegin(context.Background())
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback(context.Background())
+			log.Println(r)
+			panic("unexpected error inserting new Work; rolled back")
+		}
+	}()
+
+	templateListing := mustInsertNewTemplateWorkListing(tx, seriesId, cs.repos)
+
+	if err := tx.Commit(context.Background()); err != nil {
+		log.Println(err)
+		panic("unexpected error committing new Work")
 	}
 
-	if latestGroupMedia != nil {
-		maxMediaIdx = int32(latestGroupMedia.Idx)
-	}
-
-	if latestGroupGroup != nil {
-		maxGroupIdx = int32(latestGroupGroup.Idx)
-	}
-
-	maxIdx := max(maxTextIdx, maxMediaIdx, maxGroupIdx)
-	if maxIdx != 0 {
-		maxIdx = maxIdx + 1
-	}
-
-	cs.groupRepo.InsertGroup(&entity.GroupArguments{
-		ParentId:      &groupId,
-		CanvasId:      canvas.Id,
-		Idx:           maxIdx,
-		SwapDirection: !group.SwapDirection,
-	})
+	return templateListing.TemplateWorkOrSeries.(*frontend.TemplateWork)
 }

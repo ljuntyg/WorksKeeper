@@ -6,39 +6,22 @@ import (
 )
 
 type WorkService struct {
-	canvasRepo  *repository.CanvasRepository
-	captionRepo *repository.CaptionRepository
-	groupRepo   *repository.GroupRepository
-	mediaRepo   *repository.MediaRepository
-	sourceRepo  *repository.SourceRepository
-	textRepo    *repository.TextRepository
-	workRepo    *repository.WorkRepository
+	repos *repository.RepositoryCollection
 }
 
-func (ws *WorkService) Init(
-	canvasRepo *repository.CanvasRepository,
-	captionRepo *repository.CaptionRepository,
-	groupRepo *repository.GroupRepository,
-	mediaRepo *repository.MediaRepository,
-	sourceRepo *repository.SourceRepository,
-	textRepo *repository.TextRepository,
-	workRepo *repository.WorkRepository) {
-	ws.canvasRepo = canvasRepo
-	ws.captionRepo = captionRepo
-	ws.groupRepo = groupRepo
-	ws.mediaRepo = mediaRepo
-	ws.sourceRepo = sourceRepo
-	ws.textRepo = textRepo
-	ws.workRepo = workRepo
+func (ws *WorkService) Init(repos *repository.RepositoryCollection) {
+	ws.repos = repos
 }
 
 func (ws *WorkService) GetTemplateData(workId int64) *template.WorkData {
+	templateWork := mustBuildTemplateWorkShallow(workId, ws.repos)
+	/* templateCanvas := mustAttachTemplateCanvas(templateWork, ws.canvasRepo)
+	templateGroup := mustAttachTemplateGroup(templateCanvas, ws.groupRepo)
+	mustAttachTemplateContents(templateGroup, ws.contentRepo, ws.groupRepo, ws.textRepo, ws.mediaRepo, ws.sourceRepo)
+	*/
+	mustFillTemplateWork(templateWork, ws.repos)
+
 	return &template.WorkData{
-		TemplateWork: buildTemplateWork(
-			workId,
-			ws.canvasRepo,
-			ws.groupRepo,
-			ws.textRepo,
-			ws.workRepo),
+		TemplateWork: templateWork,
 	}
 }
