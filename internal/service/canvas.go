@@ -141,6 +141,27 @@ func (cs *CanvasService) MustDecreaseContentPosition(contentId int64) {
 	}
 }
 
+func (cs *CanvasService) MustDeleteContent(contentId int64) {
+	tx := cs.repos.MustBegin(context.Background())
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback(context.Background())
+			log.Println(r)
+			panic("unexpected error deleting Content; rolled back")
+		}
+	}()
+
+	if err := cs.repos.ContentRepo.DeleteContentTx(tx, contentId); err != nil {
+		log.Println(err)
+		panic("unexpected error deleting Content")
+	}
+
+	if err := tx.Commit(context.Background()); err != nil {
+		log.Println(err)
+		panic("unexpected error deleting Content")
+	}
+}
+
 func (cs *CanvasService) mustInsertNewWork(seriesId int64) *frontend.TemplateWork {
 	tx := cs.repos.MustBegin(context.Background())
 

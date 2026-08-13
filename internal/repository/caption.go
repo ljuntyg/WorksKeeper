@@ -19,3 +19,8 @@ func (cr *CaptionRepository) GetCaption(id int64) (entity.Caption, error) {
 	return selectExactlyOneFromTableWhere[entity.Caption](context.Background(), cr.pgxPool, "captions",
 		map[string]any{"id": id}, nil, nil)
 }
+
+func (cr *CaptionRepository) GetCaptionByMediaId(mediaId int64) (*entity.Caption, error) {
+	return selectOptionalOneFromTableWhere[entity.Caption](context.Background(), cr.pgxPool, "captions",
+		map[string]any{"media_id": mediaId}, nil, nil)
+}

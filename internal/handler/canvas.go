@@ -100,6 +100,13 @@ func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		ch.handleContentDecreasePosition(rw, r, int64(contentId))
+	case "delete-content":
+		contentId, err := strconv.Atoi(value)
+		if err != nil {
+			panic("unexpected error getting Content id")
+		}
+
+		ch.handleDeleteContent(rw, r, int64(contentId))
 	}
 }
 
@@ -130,5 +137,10 @@ func (ch *CanvasHandler) handleContentIncreasePosition(rw http.ResponseWriter, r
 
 func (ch *CanvasHandler) handleContentDecreasePosition(rw http.ResponseWriter, r *http.Request, contentId int64) {
 	ch.canvasService.MustDecreaseContentPosition(contentId)
+	ch.handleGet(rw, r, true)
+}
+
+func (ch *CanvasHandler) handleDeleteContent(rw http.ResponseWriter, r *http.Request, contentId int64) {
+	ch.canvasService.MustDeleteContent(contentId)
 	ch.handleGet(rw, r, true)
 }

@@ -157,3 +157,18 @@ func (cr *ContentRepository) DecreaseContentPositionTx(tx pgx.Tx, contentId int6
 	}
 	return &result, nil
 }
+
+func (cr *ContentRepository) DeleteContentTx(tx pgx.Tx, contentId int64) error {
+	const query = `
+	DELETE FROM contents
+	WHERE id = @content_id;
+	`
+
+	_, err := tx.Exec(context.Background(), query, pgx.NamedArgs{"content_id": contentId})
+	if err != nil {
+		log.Printf("DeleteContentTx error: %s", err)
+		return err
+	}
+
+	return nil
+}

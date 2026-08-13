@@ -186,11 +186,8 @@ func mustInsertNewTemplateWorkListing(tx pgx.Tx, parentSeriesId int64, repos *re
 }
 
 func mustInsertNewTemplateWork(tx pgx.Tx, listingId int64, repos *repository.RepositoryCollection) *frontend.TemplateWork {
-	templateCanvas := mustInsertNewTemplateCanvas(tx, repos)
-
 	work, err := repos.WorkRepo.InsertWorkTx(tx, &entity.WorkArguments{
 		ListingId: listingId,
-		CanvasId:  templateCanvas.Canvas.Id,
 		Title:     "Untitled Work",
 	})
 
@@ -198,6 +195,8 @@ func mustInsertNewTemplateWork(tx pgx.Tx, listingId int64, repos *repository.Rep
 		log.Println(err)
 		panic("unexpected error inserting new Work")
 	}
+
+	templateCanvas := mustInsertNewTemplateCanvas(tx, work.Id, repos)
 
 	return &frontend.TemplateWork{
 		Work:           &work,
@@ -226,17 +225,17 @@ func mustFillTemplateWork(tw *frontend.TemplateWork, repos *repository.Repositor
 // *
 // * CANVAS CANVAS CANVAS
 // *
-func mustInsertNewTemplateCanvas(tx pgx.Tx, repos *repository.RepositoryCollection) *frontend.TemplateCanvas {
-	templateGroup := mustInsertNewTemplateGroup(tx, nil, repos)
-
+func mustInsertNewTemplateCanvas(tx pgx.Tx, workId int64, repos *repository.RepositoryCollection) *frontend.TemplateCanvas {
 	canvas, err := repos.CanvasRepo.InsertCanvasTx(tx, &entity.CanvasArguments{
-		RootGroupId: templateGroup.Group.Id,
+		WorkId: workId,
 	})
 
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error inserting new Canvas")
 	}
+
+	templateGroup := mustInsertNewRootTemplateGroup(tx, canvas.Id, repos)
 
 	return &frontend.TemplateCanvas{
 		Canvas:        &canvas,
@@ -245,22 +244,19 @@ func mustInsertNewTemplateCanvas(tx pgx.Tx, repos *repository.RepositoryCollecti
 }
 
 func mustAttachTemplateCanvas(tw *frontend.TemplateWork, repos *repository.RepositoryCollection) *frontend.TemplateCanvas {
-	templateCanvas := mustBuildTemplateCanvasShallow(tw.Work.CanvasId, repos)
-	tw.TemplateCanvas = templateCanvas
-	return templateCanvas
-}
-
-func mustBuildTemplateCanvasShallow(canvasId int64, repos *repository.RepositoryCollection) *frontend.TemplateCanvas {
-	canvas, err := repos.CanvasRepo.GetCanvas(canvasId)
+	canvas, err := repos.CanvasRepo.GetCanvasByWorkId(tw.Work.Id)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Canvas")
 	}
 
-	return &frontend.TemplateCanvas{
+	templateCanvas := &frontend.TemplateCanvas{
 		Canvas:        &canvas,
 		TemplateGroup: nil,
 	}
+
+	tw.TemplateCanvas = templateCanvas
+	return templateCanvas
 }
 
 func mustFillTemplateCanvas(tc *frontend.TemplateCanvas, repos *repository.RepositoryCollection) {
@@ -278,8 +274,7 @@ func mustInsertNewTemplateGroupContent(tx pgx.Tx, parentGroupId int64, repos *re
 		panic("unexpected error inserting new Content")
 	}
 
-	contentId := content.Id
-	templateGroup := mustInsertNewTemplateGroup(tx, &contentId, repos)
+	templateGroup := mustInsertNewNestedTemplateGroup(tx, content.Id, repos)
 
 	return &frontend.TemplateContent{
 		Content:                    &content,
@@ -287,9 +282,30 @@ func mustInsertNewTemplateGroupContent(tx pgx.Tx, parentGroupId int64, repos *re
 	}
 }
 
-func mustInsertNewTemplateGroup(tx pgx.Tx, contentId *int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
+// A Group's parent is either a Canvas (root) or a Content (nested), never both
+// and never neither — mirroring the CHECK constraint on the groups table.
+func mustInsertNewRootTemplateGroup(tx pgx.Tx, canvasId int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
 	group, err := repos.GroupRepo.InsertGroupTx(tx, &entity.GroupArguments{
-		ContentId:     contentId,
+		CanvasId:      &canvasId,
+		ContentId:     nil,
+		SwapDirection: false,
+	})
+
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error inserting new Group")
+	}
+
+	return &frontend.TemplateGroup{
+		Group:            &group,
+		TemplateContents: nil,
+	}
+}
+
+func mustInsertNewNestedTemplateGroup(tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
+	group, err := repos.GroupRepo.InsertGroupTx(tx, &entity.GroupArguments{
+		CanvasId:      nil,
+		ContentId:     &contentId,
 		SwapDirection: false,
 	})
 
@@ -305,7 +321,17 @@ func mustInsertNewTemplateGroup(tx pgx.Tx, contentId *int64, repos *repository.R
 }
 
 func mustAttachTemplateGroup(tc *frontend.TemplateCanvas, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
-	templateGroup := mustBuildTemplateGroupShallow(tc.Canvas.RootGroupId, repos)
+	group, err := repos.GroupRepo.GetRootGroupByCanvasId(tc.Canvas.Id)
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error getting Group")
+	}
+
+	templateGroup := &frontend.TemplateGroup{
+		Group:            &group,
+		TemplateContents: nil,
+	}
+
 	tc.TemplateGroup = templateGroup
 	return templateGroup
 }
@@ -457,7 +483,7 @@ func mustBuildTemplateTextShallow(textId int64, repos *repository.RepositoryColl
 // * MEDIA MEDIA MEDIA
 // *
 // Sources are always fetched (cheap, always wanted); TemplateCaption is left
-// nil since media.caption_id is nullable — attach separately.
+// nil since a Media may have no Caption — attach separately.
 func mustInsertNewTemplateMediaContent(tx pgx.Tx, parentGroupId int64, repos *repository.RepositoryCollection) *frontend.TemplateContent {
 	content, err := repos.ContentRepo.InsertContentAppendTx(tx, parentGroupId, "media")
 	if err != nil {
@@ -476,7 +502,6 @@ func mustInsertNewTemplateMediaContent(tx pgx.Tx, parentGroupId int64, repos *re
 func mustInsertNewTemplateMedia(tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateMedia {
 	media, err := repos.MediaRepo.InsertMediaTx(tx, &entity.MediaArguments{
 		ContentId: contentId,
-		CaptionId: nil,
 		MediaType: "empty",
 	})
 
@@ -510,20 +535,22 @@ func mustBuildTemplateMediaShallow(mediaId int64, repos *repository.RepositoryCo
 	}
 }
 
-// Nil if the Media has no caption.
+// Nil if the Media has no caption. Leaves tm.TemplateCaption untouched in that
+// case: assigning a nil *TemplateCaption would make the Templatable interface
+// non-nil, and templates guarding on it would then dereference nil.
 func mustAttachTemplateCaption(tm *frontend.TemplateMedia, repos *repository.RepositoryCollection) *frontend.TemplateCaption {
-	if tm.Media.CaptionId == nil {
-		return nil
-	}
-
-	caption, err := repos.CaptionRepo.GetCaption(*tm.Media.CaptionId)
+	caption, err := repos.CaptionRepo.GetCaptionByMediaId(tm.Media.Id)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Caption")
 	}
 
+	if caption == nil {
+		return nil
+	}
+
 	templateCaption := &frontend.TemplateCaption{
-		Caption: &caption,
+		Caption: caption,
 	}
 
 	tm.TemplateCaption = templateCaption

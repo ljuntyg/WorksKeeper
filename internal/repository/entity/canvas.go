@@ -7,19 +7,18 @@ import (
 )
 
 type Canvas struct {
-	Id          int64     `db:"id"`
-	RootGroupId int64     `db:"root_group_id"`
-	LastEdit    time.Time `db:"last_edit"`
+	Id       int64     `db:"id"`
+	WorkId   int64     `db:"work_id"`
+	LastEdit time.Time `db:"last_edit"`
 }
 
+// LastEdit is omitted so the column's DEFAULT NOW() applies on insert.
 type CanvasArguments struct {
-	RootGroupId int64
-	LastEdit    time.Time
+	WorkId int64
 }
 
 func (ca *CanvasArguments) GetNamedArgs() pgx.NamedArgs {
 	return pgx.NamedArgs{
-		"root_group_id": ca.RootGroupId,
-		"last_edit":     ca.LastEdit,
+		"work_id": ca.WorkId,
 	}
 }

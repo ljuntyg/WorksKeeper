@@ -1,8 +1,10 @@
 <!-- TemplateMedia is passed in -->
 <figure>
-  {{ if eq $.Media.MediaType "text" }}
+  {{ if eq $.Media.MediaType "image" }}
 
-  <img src="{{ index $.Sources 0 }}" alt="Image">
+  {{ if $.Sources }}
+  <img src="{{ (index $.Sources 0).Link }}" alt="Image">
+  {{ end }}
 
   {{ else if eq $.Media.MediaType "video" }}
 
@@ -16,8 +18,8 @@
   {{ else if eq $.Media.MediaType "sound" }}
 
   <audio controls loop>
-		{{ range .GetSources }}
-		<source src="{{ . }}">
+		{{ range $.Sources }}
+		<source src="{{ .Link }}">
 		{{ end }}
 		Your browser doesn't support this audio.
 	</audio>

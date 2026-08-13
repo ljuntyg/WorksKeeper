@@ -33,3 +33,8 @@ func (gr *GroupRepository) GetGroupByContentId(contentId int64) (entity.Group, e
 	return selectExactlyOneFromTableWhere[entity.Group](context.Background(), gr.pgxPool, "groups",
 		map[string]any{"content_id": contentId}, nil, nil)
 }
+
+func (gr *GroupRepository) GetRootGroupByCanvasId(canvasId int64) (entity.Group, error) {
+	return selectExactlyOneFromTableWhere[entity.Group](context.Background(), gr.pgxPool, "groups",
+		map[string]any{"canvas_id": canvasId}, nil, nil)
+}
