@@ -98,7 +98,11 @@ func main() {
 	workHandler := &handler.WorkHandler{}
 	workHandler.Init(workService)
 
-	mux.HandleFunc("/{$}", homeHandler.HandleRequest)
+	mux.HandleFunc("/{$}", func(rw http.ResponseWriter, r *http.Request) {
+		http.Redirect(rw, r, "/works", http.StatusMovedPermanently)
+	})
+
+	mux.HandleFunc("/works", homeHandler.HandleRequest)
 	mux.HandleFunc("/work/{numbering}", workHandler.HandleRequest)
 	mux.HandleFunc("/series/{numbering}", seriesHandler.HandleRequest)
 	mux.HandleFunc("/compose/work/{numbering}", canvasHandler.HandleRequest)
