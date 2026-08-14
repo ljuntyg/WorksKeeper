@@ -18,6 +18,10 @@ type RepositoryCollection struct {
 	CaptionRepo    *CaptionRepository
 	CollectionRepo *CollectionRepository
 	ContentRepo    *ContentRepository
+	FileRepo       *FileRepository
+	FilenameRepo   *FilenameRepository
+	FilenodeRepo   *FilenodeRepository
+	FileserverRepo *FileserverRepository
 	GroupRepo      *GroupRepository
 	ListingRepo    *ListingRepository
 	MediaRepo      *MediaRepository
@@ -33,6 +37,10 @@ func (rc *RepositoryCollection) Init(
 	captionRepo *CaptionRepository,
 	collectionRepo *CollectionRepository,
 	contentRepo *ContentRepository,
+	fileRepo *FileRepository,
+	filenameRepo *FilenameRepository,
+	filenodeRepo *FilenodeRepository,
+	fileserverRepo *FileserverRepository,
 	groupRepo *GroupRepository,
 	listingRepo *ListingRepository,
 	mediaRepo *MediaRepository,
@@ -54,6 +62,18 @@ func (rc *RepositoryCollection) Init(
 
 	rc.ContentRepo = contentRepo
 	contentRepo.init(pgxPool)
+
+	rc.FileRepo = fileRepo
+	fileRepo.init(pgxPool)
+
+	rc.FilenameRepo = filenameRepo
+	filenameRepo.init(pgxPool)
+
+	rc.FilenodeRepo = filenodeRepo
+	filenodeRepo.init(pgxPool)
+
+	rc.FileserverRepo = fileserverRepo
+	fileserverRepo.init(pgxPool)
 
 	rc.GroupRepo = groupRepo
 	groupRepo.init(pgxPool)
@@ -369,6 +389,46 @@ func updateExactlyOneTableWhere[T any](ctx context.Context, db pgxExecutor, tabl
 	}
 
 	return rows[0], nil
+}
+
+// TODO: what context should callers pass?
+// deleteFromTableWhere deletes all rows matching the given conditions.
+func deleteFromTableWhere(ctx context.Context, db pgxExecutor, tableName string, equals map[string]any, null *nullFilter) error {
+	if len(equals) == 0 && null == nil {
+		// refuse to accidentally delete every row in the table
+		return fmt.Errorf("delete: no where conditions provided")
+	}
+
+	args := pgx.NamedArgs{}
+	conditions := make([]string, 0, len(equals)+1)
+
+	for col, val := range equals {
+		sanitizedCol := pgx.Identifier{col}.Sanitize()
+		conditions = append(conditions, fmt.Sprintf("%s = @%s", sanitizedCol, col))
+		args[col] = val
+	}
+
+	if null != nil {
+		sanitizedCol := pgx.Identifier{null.column}.Sanitize()
+		if null.isNull {
+			conditions = append(conditions, fmt.Sprintf("%s IS NULL", sanitizedCol))
+		} else {
+			conditions = append(conditions, fmt.Sprintf("%s IS NOT NULL", sanitizedCol))
+		}
+	}
+
+	query := fmt.Sprintf(
+		"DELETE FROM %s WHERE %s",
+		pgx.Identifier{tableName}.Sanitize(),
+		strings.Join(conditions, " AND "),
+	)
+
+	if _, err := db.Exec(ctx, query, args); err != nil {
+		log.Printf("deleteFromTableWhere error: %s", err)
+		return err
+	}
+
+	return nil
 }
 
 // TODO: what context should callers pass?

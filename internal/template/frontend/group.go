@@ -1,13 +1,13 @@
 package frontend
 
 import (
-	"WorksKeeper/internal/repository/entity"
+	"WorksKeeper/internal/repository"
 	"fmt"
 	"html/template"
 )
 
 type TemplateGroup struct {
-	Group            *entity.Group
+	Group            *repository.Group
 	TemplateContents []Templatable
 }
 

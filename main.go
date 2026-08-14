@@ -25,17 +25,11 @@ func main() {
 	/* cssFileServer := http.FileServer(http.Dir("./resources/static/"))
 	mux.Handle("/static/", http.StripPrefix("/static/", cssFileServer)) */
 
-	imageFs := http.FileServer(http.Dir("./resources/media/images"))
-	mux.Handle("/media/images/", http.StripPrefix("/media/images/", imageFs))
-
-	soundFs := http.FileServer(http.Dir("./resources/media/sounds"))
-	mux.Handle("/media/sounds/", http.StripPrefix("/media/sounds/", soundFs))
-
-	textFs := http.FileServer(http.Dir("./resources/media/texts"))
-	mux.Handle("/media/texts/", http.StripPrefix("/media/texts/", textFs))
-
-	videoF := http.FileServer(http.Dir("./resources/media/videos"))
-	mux.Handle("/media/videos/", http.StripPrefix("/media/videos/", videoF))
+	// one file server per Fileserver row; disk_path is served under url_path,
+	// except that only the stored files under it are, never the staging directory
+	mediaFileserver := &repository.Fileserver{DiskPath: "./resources/media"}
+	mediaFs := http.FileServer(http.Dir(mediaFileserver.ObjectsPath()))
+	mux.Handle("/media/", http.StripPrefix("/media/", handler.WithoutContentSniffing(mediaFs)))
 
 	pgxPool := repository.GetPgxPool(
 		os.Getenv("PGHOST"),
@@ -49,6 +43,10 @@ func main() {
 	captionRepo := &repository.CaptionRepository{}
 	collectionRepo := &repository.CollectionRepository{}
 	contentRepo := &repository.ContentRepository{}
+	fileRepo := &repository.FileRepository{}
+	filenameRepo := &repository.FilenameRepository{}
+	filenodeRepo := &repository.FilenodeRepository{}
+	fileserverRepo := &repository.FileserverRepository{}
 	groupRepo := &repository.GroupRepository{}
 	listingRepo := &repository.ListingRepository{}
 	mediaRepo := &repository.MediaRepository{}
@@ -64,6 +62,10 @@ func main() {
 		captionRepo,
 		collectionRepo,
 		contentRepo,
+		fileRepo,
+		filenameRepo,
+		filenodeRepo,
+		fileserverRepo,
 		groupRepo,
 		listingRepo,
 		mediaRepo,

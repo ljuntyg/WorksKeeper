@@ -32,7 +32,7 @@ go.work.sum
 # .vscode/
 
 ## AND ##
-resources/media/*/*
+resources/media/*
 resources/test/*
 notes.md
 nginx.conf

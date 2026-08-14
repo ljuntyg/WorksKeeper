@@ -1,13 +1,13 @@
 package frontend
 
 import (
-	"WorksKeeper/internal/repository/entity"
+	"WorksKeeper/internal/repository"
 	"fmt"
 	"html/template"
 )
 
 type TemplateListing struct {
-	Listing              *entity.Listing
+	Listing              *repository.Listing
 	TemplateWorkOrSeries Listable
 }
 

@@ -9,14 +9,16 @@ DROP TABLE IF EXISTS texts CASCADE;
 DROP TABLE IF EXISTS media CASCADE;
 DROP TABLE IF EXISTS sources CASCADE;
 DROP TABLE IF EXISTS captions CASCADE;
+DROP TABLE IF EXISTS fileservers CASCADE;
+DROP TABLE IF EXISTS filenodes CASCADE;
+DROP TABLE IF EXISTS files CASCADE;
+DROP TABLE IF EXISTS filenames CASCADE;
 
 DROP TYPE IF EXISTS l_type CASCADE;
 DROP TYPE IF EXISTS c_type CASCADE;
-DROP TYPE IF EXISTS m_type CASCADE;
 
 CREATE TYPE l_type AS ENUM ('series', 'work');
 CREATE TYPE c_type AS ENUM ('group', 'text', 'media');
-CREATE TYPE m_type AS ENUM ('sound', 'video', 'image', 'empty');
 
 CREATE TABLE collections (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
@@ -52,8 +54,6 @@ CREATE TABLE canvases (
     last_edit TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- A Group's parent is either a Canvas (root group) or a Content (nested
--- group), never both and never neither.
 CREATE TABLE groups (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
     canvas_id BIGINT UNIQUE,
@@ -78,14 +78,13 @@ CREATE TABLE texts (
 
 CREATE TABLE media (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    content_id BIGINT UNIQUE NOT NULL,
-    media_type M_TYPE NOT NULL
+    content_id BIGINT UNIQUE NOT NULL
 );
 
 CREATE TABLE sources (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
     media_id BIGINT NOT NULL,
-    link VARCHAR(4096) NOT NULL
+    filename_id BIGINT NOT NULL
 );
 
 CREATE TABLE captions (
@@ -94,7 +93,44 @@ CREATE TABLE captions (
     content VARCHAR(4194304)
 );
 
+CREATE TABLE fileservers (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    scheme VARCHAR(8) NOT NULL,
+    host VARCHAR(4096) NOT NULL,
+    port INTEGER NOT NULL,
+    disk_path VARCHAR(4096) NOT NULL,
+    url_path VARCHAR(4096) NOT NULL,
+    UNIQUE (host, port)
+);
+
+CREATE TABLE files (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    size BIGINT NOT NULL,
+    hash VARCHAR(128) NOT NULL,
+    mime_type VARCHAR(255) NOT NULL,
+    UNIQUE (hash, size)
+);
+
+CREATE TABLE filenodes (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    file_id BIGINT NOT NULL,
+    fileserver_id BIGINT NOT NULL,
+    path VARCHAR(4096) NOT NULL,
+    UNIQUE (fileserver_id, path)
+);
+
+CREATE TABLE filenames (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    file_id BIGINT NOT NULL,
+    name VARCHAR(4096) NOT NULL,
+    UNIQUE (file_id, name)
+);
+
 CREATE INDEX sources_media_id_idx ON sources (media_id);
+CREATE INDEX sources_filename_id_idx ON sources (filename_id);
+CREATE INDEX filenodes_file_id_idx ON filenodes (file_id);
+CREATE INDEX filenodes_fileserver_id_idx ON filenodes (fileserver_id);
+CREATE INDEX filenames_file_id_idx ON filenames (file_id);
 
 ALTER TABLE collections
 ADD CONSTRAINT collections_root_series_fk
@@ -144,7 +180,45 @@ ALTER TABLE captions
 ADD CONSTRAINT captions_media_fk
 FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE;
 
+ALTER TABLE sources
+ADD CONSTRAINT sources_filename_fk
+FOREIGN KEY (filename_id) REFERENCES filenames(id) ON DELETE RESTRICT;
+
+ALTER TABLE filenodes
+ADD CONSTRAINT filenodes_file_fk
+FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE;
+
+ALTER TABLE filenodes
+ADD CONSTRAINT filenodes_fileserver_fk
+FOREIGN KEY (fileserver_id) REFERENCES fileservers(id) ON DELETE CASCADE;
+
+ALTER TABLE filenames
+ADD CONSTRAINT filenames_file_fk
+FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE;
+
 -- ===== mock data =====
+
+-- The local file server, matching the static file handlers registered in main.
+INSERT INTO fileservers (scheme, host, port, disk_path, url_path)
+VALUES ('http', 'localhost', 8080, './resources/media', '/media/'); -- fileserver.id 1
+
+-- Placeholder digests; real ones are computed from the bytes on upload.
+INSERT INTO files (size, hash, mime_type)
+VALUES (1048576, '1111111111111111111111111111111111111111111111111111111111111111', 'video/mp4'); -- file.id 1
+
+INSERT INTO files (size, hash, mime_type)
+VALUES (65536, '2222222222222222222222222222222222222222222222222222222222222222', 'image/png'); -- file.id 2
+
+INSERT INTO files (size, hash, mime_type)
+VALUES (262144, '3333333333333333333333333333333333333333333333333333333333333333', 'audio/ogg'); -- file.id 3
+
+INSERT INTO filenames (file_id, name) VALUES (1, 'introsong.mp4'); -- filename.id 1
+INSERT INTO filenames (file_id, name) VALUES (2, 'plots.png');     -- filename.id 2
+INSERT INTO filenames (file_id, name) VALUES (3, 'test.ogg');      -- filename.id 3
+
+INSERT INTO filenodes (file_id, fileserver_id, path) VALUES (1, 1, 'videos/introsong.mp4'); -- filenode.id 1
+INSERT INTO filenodes (file_id, fileserver_id, path) VALUES (2, 1, 'images/plots.png');     -- filenode.id 2
+INSERT INTO filenodes (file_id, fileserver_id, path) VALUES (3, 1, 'sounds/test.ogg');      -- filenode.id 3
 
 -- Root series for the only collection
 INSERT INTO series (title, created_at) VALUES ('Series #1 (root)', NOW());          -- series.id 1, listing_id NULL
@@ -213,14 +287,14 @@ VALUES (3, 'Text #1');
 INSERT INTO contents (parent_group_id, position, content_type)
 VALUES (3, 2.0, 'media'); -- content.id 4
 
-INSERT INTO media (content_id, media_type)
-VALUES (4, 'video'); -- media.id 1
+INSERT INTO media (content_id)
+VALUES (4); -- media.id 1
 
 INSERT INTO captions (media_id, content)
 VALUES (1, 'Caption #1');
 
-INSERT INTO sources (media_id, link)
-VALUES (1, 'http://localhost:8080/media/videos/introsong.mp4');
+INSERT INTO sources (media_id, filename_id)
+VALUES (1, 1);
 
 -- Canvas #2 contents: a single top-level text
 
@@ -245,11 +319,11 @@ INSERT INTO groups (canvas_id) VALUES (3); -- group.id 4: root group for Work #3
 INSERT INTO contents (parent_group_id, position, content_type)
 VALUES (4, 1.0, 'media'); -- content.id 6
 
-INSERT INTO media (content_id, media_type)
-VALUES (6, 'image'); -- media.id 2
+INSERT INTO media (content_id)
+VALUES (6); -- media.id 2
 
-INSERT INTO sources (media_id, link)
-VALUES (2, 'http://localhost:8080/media/images/plots.png');
+INSERT INTO sources (media_id, filename_id)
+VALUES (2, 2);
 
 INSERT INTO captions (media_id, content)
 VALUES (2, 'Caption #2 (on an image)');
@@ -257,8 +331,8 @@ VALUES (2, 'Caption #2 (on an image)');
 INSERT INTO contents (parent_group_id, position, content_type)
 VALUES (4, 2.0, 'media'); -- content.id 7
 
-INSERT INTO media (content_id, media_type)
-VALUES (7, 'sound'); -- media.id 3
+INSERT INTO media (content_id)
+VALUES (7); -- media.id 3
 
-INSERT INTO sources (media_id, link)
-VALUES (3, 'http://localhost:8080/media/sounds/test.ogg');
+INSERT INTO sources (media_id, filename_id)
+VALUES (3, 3);

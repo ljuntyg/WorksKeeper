@@ -1,14 +1,14 @@
 package frontend
 
 import (
-	"WorksKeeper/internal/repository/entity"
+	"WorksKeeper/internal/repository"
 	"fmt"
 	"html/template"
 	"strconv"
 )
 
 type TemplateWork struct {
-	Work           *entity.Work
+	Work           *repository.Work
 	TemplateCanvas Templatable
 }
 

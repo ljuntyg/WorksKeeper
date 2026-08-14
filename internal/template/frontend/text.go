@@ -1,13 +1,13 @@
 package frontend
 
 import (
-	"WorksKeeper/internal/repository/entity"
+	"WorksKeeper/internal/repository"
 	"fmt"
 	"html/template"
 )
 
 type TemplateText struct {
-	Text *entity.Text
+	Text *repository.Text
 }
 
 func (tt *TemplateText) GetName(prefix string) string {

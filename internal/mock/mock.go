@@ -11,3 +11,8 @@ func GetMockHost() string {
 	log.Println("calling MOCK GetMockHost()")
 	return "localhost"
 }
+
+func GetMockPort() string {
+	log.Println("calling MOCK GetMockPort()")
+	return ":8080"
+}

@@ -1,0 +1,7 @@
+<!-- TemplateSource is passed in -->
+<!-- a source in a picture is selected by srcset, one in a video or audio by src -->
+{{ if eq $.GetMediaKind "image" }}
+<source srcset="{{ $.GetLink }}" type="{{ $.GetMimeType }}">
+{{ else if or (eq $.GetMediaKind "video") (eq $.GetMediaKind "sound") }}
+<source src="{{ $.GetLink }}" type="{{ $.GetMimeType }}">
+{{ end }}

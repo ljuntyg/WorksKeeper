@@ -1,5 +1,5 @@
 <!-- TemplateMedia is passed in -->
-{{ if eq $.Media.MediaType "empty" }}
+{{ if not $.TemplateSources }}
 <fieldset>
 	<legend>	
 		<input type="file" name="upload" />
@@ -15,26 +15,29 @@
 </fieldset>
 {{ else }}
 <figure>
-  {{ if eq $.Media.MediaType "image" }}
+  {{ if eq $.GetMediaKind "image" }}
 
-  {{ if $.Sources }}
-  <img src="{{ (index $.Sources 0).Link }}" alt="Image">
-  {{ end }}
+  <picture>
+		{{ range $.TemplateSources }}
+		{{ .ToEditableHtml }}
+		{{ end }}
+		<img src="{{ $.GetFallbackLink }}" alt="Image">
+	</picture>
 
-  {{ else if eq $.Media.MediaType "video" }}
+  {{ else if eq $.GetMediaKind "video" }}
 
   <video controls loop>
-		{{ range $.Sources }}
-		<source src="{{ .Link }}">
+		{{ range $.TemplateSources }}
+		{{ .ToEditableHtml }}
 		{{ end }}
 		Your browser doesn't support this video.
 	</video>
 
-  {{ else if eq $.Media.MediaType "sound" }}
+  {{ else if eq $.GetMediaKind "sound" }}
 
   <audio controls loop>
-		{{ range $.Sources }}
-		<source src="{{ .Link }}">
+		{{ range $.TemplateSources }}
+		{{ .ToEditableHtml }}
 		{{ end }}
 		Your browser doesn't support this audio.
 	</audio>

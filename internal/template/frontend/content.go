@@ -1,13 +1,13 @@
 package frontend
 
 import (
-	"WorksKeeper/internal/repository/entity"
+	"WorksKeeper/internal/repository"
 	"fmt"
 	"html/template"
 )
 
 type TemplateContent struct {
-	Content                    *entity.Content
+	Content                    *repository.Content
 	TemplateGroupOrTextOrMedia Templatable
 }
 

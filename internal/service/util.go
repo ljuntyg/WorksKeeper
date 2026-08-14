@@ -2,7 +2,6 @@ package service
 
 import (
 	"WorksKeeper/internal/repository"
-	"WorksKeeper/internal/repository/entity"
 	"WorksKeeper/internal/template/frontend"
 	"log"
 
@@ -15,7 +14,7 @@ import (
 func mustInsertNewTemplateCollection(tx pgx.Tx, repos *repository.RepositoryCollection) *frontend.TemplateCollection {
 	rootSeries := mustInsertNewTemplateSeries(tx, nil, repos)
 
-	collection, err := repos.CollectionRepo.InsertCollectionTx(tx, &entity.CollectionArguments{
+	collection, err := repos.CollectionRepo.InsertCollectionTx(tx, &repository.CollectionArguments{
 		RootSeriesId: rootSeries.Series.Id,
 	})
 
@@ -63,7 +62,7 @@ func mustInsertNewTemplateSeriesListing(tx pgx.Tx, parentSeriesId int64, repos *
 }
 
 func mustInsertNewTemplateSeries(tx pgx.Tx, listingId *int64, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
-	series, err := repos.SeriesRepo.InsertSeriesTx(tx, &entity.SeriesArguments{
+	series, err := repos.SeriesRepo.InsertSeriesTx(tx, &repository.SeriesArguments{
 		ListingId: listingId,
 	})
 
@@ -186,7 +185,7 @@ func mustInsertNewTemplateWorkListing(tx pgx.Tx, parentSeriesId int64, repos *re
 }
 
 func mustInsertNewTemplateWork(tx pgx.Tx, listingId int64, repos *repository.RepositoryCollection) *frontend.TemplateWork {
-	work, err := repos.WorkRepo.InsertWorkTx(tx, &entity.WorkArguments{
+	work, err := repos.WorkRepo.InsertWorkTx(tx, &repository.WorkArguments{
 		ListingId: listingId,
 		Title:     "Untitled Work",
 	})
@@ -226,7 +225,7 @@ func mustFillTemplateWork(tw *frontend.TemplateWork, repos *repository.Repositor
 // * CANVAS CANVAS CANVAS
 // *
 func mustInsertNewTemplateCanvas(tx pgx.Tx, workId int64, repos *repository.RepositoryCollection) *frontend.TemplateCanvas {
-	canvas, err := repos.CanvasRepo.InsertCanvasTx(tx, &entity.CanvasArguments{
+	canvas, err := repos.CanvasRepo.InsertCanvasTx(tx, &repository.CanvasArguments{
 		WorkId: workId,
 	})
 
@@ -285,7 +284,7 @@ func mustInsertNewTemplateGroupContent(tx pgx.Tx, parentGroupId int64, repos *re
 // A Group's parent is either a Canvas (root) or a Content (nested), never both
 // and never neither — mirroring the CHECK constraint on the groups table.
 func mustInsertNewRootTemplateGroup(tx pgx.Tx, canvasId int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
-	group, err := repos.GroupRepo.InsertGroupTx(tx, &entity.GroupArguments{
+	group, err := repos.GroupRepo.InsertGroupTx(tx, &repository.GroupArguments{
 		CanvasId:      &canvasId,
 		ContentId:     nil,
 		SwapDirection: false,
@@ -303,7 +302,7 @@ func mustInsertNewRootTemplateGroup(tx pgx.Tx, canvasId int64, repos *repository
 }
 
 func mustInsertNewNestedTemplateGroup(tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
-	group, err := repos.GroupRepo.InsertGroupTx(tx, &entity.GroupArguments{
+	group, err := repos.GroupRepo.InsertGroupTx(tx, &repository.GroupArguments{
 		CanvasId:      nil,
 		ContentId:     &contentId,
 		SwapDirection: false,
@@ -450,7 +449,7 @@ func mustInsertNewTemplateTextContent(tx pgx.Tx, parentGroupId int64, repos *rep
 }
 
 func mustInsertNewTemplateText(tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateText {
-	text, err := repos.TextRepo.InsertTextTx(tx, &entity.TextArguments{
+	text, err := repos.TextRepo.InsertTextTx(tx, &repository.TextArguments{
 		ContentId: contentId,
 		Content:   "",
 	})
@@ -500,9 +499,8 @@ func mustInsertNewTemplateMediaContent(tx pgx.Tx, parentGroupId int64, repos *re
 }
 
 func mustInsertNewTemplateMedia(tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateMedia {
-	media, err := repos.MediaRepo.InsertMediaTx(tx, &entity.MediaArguments{
+	media, err := repos.MediaRepo.InsertMediaTx(tx, &repository.MediaArguments{
 		ContentId: contentId,
-		MediaType: "empty",
 	})
 
 	if err != nil {
@@ -528,10 +526,36 @@ func mustBuildTemplateMediaShallow(mediaId int64, repos *repository.RepositoryCo
 		panic("unexpected error getting Sources for Media")
 	}
 
+	templateSources := make([]frontend.Templatable, 0, len(sources))
+	for i := range sources {
+		templateSources = append(templateSources, mustBuildTemplateSource(&sources[i], repos))
+	}
+
 	return &frontend.TemplateMedia{
 		Media:           &media,
-		Sources:         sources,
+		TemplateSources: templateSources,
 		TemplateCaption: nil,
+	}
+}
+
+// *
+// * CAPTION CAPTION CAPTION
+// *
+// A Caption belongs to a single Media — captions.media_id is unique — so it is
+// inserted against the Media it captions rather than appended to a Group.
+func mustInsertNewTemplateCaption(tx pgx.Tx, mediaId int64, repos *repository.RepositoryCollection) *frontend.TemplateCaption {
+	caption, err := repos.CaptionRepo.InsertCaptionTx(tx, &repository.CaptionArguments{
+		MediaId: mediaId,
+		Content: "",
+	})
+
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error inserting new Caption")
+	}
+
+	return &frontend.TemplateCaption{
+		Caption: &caption,
 	}
 }
 
@@ -555,4 +579,45 @@ func mustAttachTemplateCaption(tm *frontend.TemplateMedia, repos *repository.Rep
 
 	tm.TemplateCaption = templateCaption
 	return templateCaption
+}
+
+// *
+// * SOURCE SOURCE SOURCE
+// *
+// A Source names a stored file rather than owning one: it points at a Filename,
+// which belongs to a File, which is stored on one or more Fileservers as
+// Filenodes. Rendering a Source needs the whole walk, because the url is
+// assembled from the Fileserver and the path the Filenode has on it.
+func mustBuildTemplateSource(source *repository.Source, repos *repository.RepositoryCollection) *frontend.TemplateSource {
+	filename, err := repos.FilenameRepo.GetFilename(source.FilenameId)
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error getting Filename for Source")
+	}
+
+	file, err := repos.FileRepo.GetFile(filename.FileId)
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error getting File for Filename")
+	}
+
+	filenode, err := repos.FilenodeRepo.GetFilenodeByFileIdOrderByIdAscending(file.Id)
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error getting Filenode for File")
+	}
+
+	fileserver, err := repos.FileserverRepo.GetFileserver(filenode.FileserverId)
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error getting Fileserver for Filenode")
+	}
+
+	return &frontend.TemplateSource{
+		Source:     source,
+		Filename:   &filename,
+		File:       &file,
+		Filenode:   &filenode,
+		Fileserver: &fileserver,
+	}
 }

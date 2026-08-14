@@ -1,13 +1,13 @@
 package frontend
 
 import (
-	"WorksKeeper/internal/repository/entity"
+	"WorksKeeper/internal/repository"
 	"fmt"
 	"html/template"
 )
 
 type TemplateCaption struct {
-	Caption *entity.Caption
+	Caption *repository.Caption
 }
 
 func (tc *TemplateCaption) GetName(prefix string) string {

@@ -11,6 +11,11 @@ type CanvasHandler struct {
 	canvasService *service.CanvasService
 }
 
+// maxUploadSize is the largest body a POST is read from. Without a limit a
+// single request can fill the disk, because the parts of a multipart form that
+// do not fit in memory are spilled to a temporary file however large they are.
+const maxUploadSize = 256 << 20
+
 func (ch *CanvasHandler) Init(canvasService *service.CanvasService) {
 	ch.canvasService = canvasService
 }
@@ -38,27 +43,33 @@ func (ch *CanvasHandler) handleGet(rw http.ResponseWriter, r *http.Request, edit
 
 func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
 	/*
-		view-work
-		edit-work
+		OK view-work
+		OK edit-work
 
-		add-text
-		add-media
-		add-group
+		OK add-text
+		OK add-media
+		OK add-group
 
-		delete-content
-		content-neg-dir
-		content-pos-dir
+		OK delete-content
+		OK content-neg-dir
+		OK content-pos-dir
 
-		delete caption
-		add caption
+		OK delete caption
+		OK add caption
 
-		upload
+		OK upload
 	*/
+
+	// Bound the body before anything reads it: parsing the form is what pulls
+	// an upload in, so the limit has to be in place before that happens.
+	r.Body = http.MaxBytesReader(rw, r.Body, maxUploadSize)
 
 	action, value := extractActionAndValueFromRequest(r)
 	log.Println(action, value)
 
-	// TODO: save texts in textboxes
+	// Every action submits the whole form, so what was typed is saved before
+	// the action runs and the page is rendered again from the database.
+	ch.saveEdits(r)
 
 	switch action {
 	case "edit-work":
@@ -86,6 +97,13 @@ func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		ch.handleAddGroup(rw, r, int64(groupId))
+	case "add-caption":
+		mediaId, err := strconv.Atoi(value)
+		if err != nil {
+			panic("unexpected error getting Media id")
+		}
+
+		ch.handleAddCaption(rw, r, int64(mediaId))
 	case "content-increase-position":
 		contentId, err := strconv.Atoi(value)
 		if err != nil {
@@ -107,12 +125,36 @@ func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		ch.handleDeleteContent(rw, r, int64(contentId))
+	case "delete-caption":
+		captionId, err := strconv.Atoi(value)
+		if err != nil {
+			panic("unexpected error getting Caption id")
+		}
+
+		ch.handleDeleteCaption(rw, r, int64(captionId))
+	case "upload":
+		mediaId, err := strconv.Atoi(value)
+		if err != nil {
+			panic("unexpected error getting Media id")
+		}
+
+		ch.handleUpload(rw, r, int64(mediaId))
 	}
 }
 
 func (ch *CanvasHandler) handleGetNew(rw http.ResponseWriter, r *http.Request) {
 	work := ch.canvasService.MustInsertNewWorkInBaseCollection()
 	http.Redirect(rw, r, "/compose"+work.GetNumberingUrlString(), http.StatusFound)
+}
+
+func (ch *CanvasHandler) saveEdits(r *http.Request) {
+	workId := mustNumberingStringToId(r.PathValue("numbering"))
+
+	ch.canvasService.MustSaveCanvasEdits(workId, &service.CanvasEdits{
+		Title:           extractOptionalFieldFromRequest(r, "title-text"),
+		TextContents:    extractIndexedFieldsFromRequest(r, "text"),
+		CaptionContents: extractIndexedFieldsFromRequest(r, "caption"),
+	})
 }
 
 func (ch *CanvasHandler) handleAddText(rw http.ResponseWriter, r *http.Request, groupId int64) {
@@ -130,6 +172,11 @@ func (ch *CanvasHandler) handleAddGroup(rw http.ResponseWriter, r *http.Request,
 	ch.handleGet(rw, r, true)
 }
 
+func (ch *CanvasHandler) handleAddCaption(rw http.ResponseWriter, r *http.Request, mediaId int64) {
+	ch.canvasService.MustInsertNewCaptionInMedia(mediaId)
+	ch.handleGet(rw, r, true)
+}
+
 func (ch *CanvasHandler) handleContentIncreasePosition(rw http.ResponseWriter, r *http.Request, contentId int64) {
 	ch.canvasService.MustIncreaseContentPosition(contentId)
 	ch.handleGet(rw, r, true)
@@ -142,5 +189,15 @@ func (ch *CanvasHandler) handleContentDecreasePosition(rw http.ResponseWriter, r
 
 func (ch *CanvasHandler) handleDeleteContent(rw http.ResponseWriter, r *http.Request, contentId int64) {
 	ch.canvasService.MustDeleteContent(contentId)
+	ch.handleGet(rw, r, true)
+}
+
+func (ch *CanvasHandler) handleDeleteCaption(rw http.ResponseWriter, r *http.Request, captionId int64) {
+	ch.canvasService.MustDeleteCaption(captionId)
+	ch.handleGet(rw, r, true)
+}
+
+func (ch *CanvasHandler) handleUpload(rw http.ResponseWriter, r *http.Request, mediaId int64) {
+	ch.canvasService.MustUploadMedia(mediaId, r)
 	ch.handleGet(rw, r, true)
 }

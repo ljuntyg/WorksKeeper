@@ -1,14 +1,35 @@
 package repository
 
 import (
-	"WorksKeeper/internal/repository/entity"
 	"context"
 	"errors"
 	"log"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type Content struct {
+	Id            int64          `db:"id"`
+	ParentGroupId int64          `db:"parent_group_id"`
+	Position      pgtype.Numeric `db:"position"`
+	ContentType   string         `db:"content_type"`
+}
+
+type ContentArguments struct {
+	ParentGroupId int64
+	Position      pgtype.Numeric
+	ContentType   string
+}
+
+func (ca *ContentArguments) GetNamedArgs() pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"parent_group_id": ca.ParentGroupId,
+		"position":        ca.Position,
+		"content_type":    ca.ContentType,
+	}
+}
 
 type ContentRepository struct {
 	pgxPool *pgxpool.Pool
@@ -18,28 +39,28 @@ func (cr *ContentRepository) init(pgxPool *pgxpool.Pool) {
 	cr.pgxPool = pgxPool
 }
 
-func (cr *ContentRepository) GetContent(id int64) (entity.Content, error) {
-	return selectExactlyOneFromTableWhere[entity.Content](context.Background(), cr.pgxPool, "contents",
+func (cr *ContentRepository) GetContent(id int64) (Content, error) {
+	return selectExactlyOneFromTableWhere[Content](context.Background(), cr.pgxPool, "contents",
 		map[string]any{"id": id}, nil, nil)
 }
 
-func (cr *ContentRepository) InsertContentTx(tx pgx.Tx, args *entity.ContentArguments) (entity.Content, error) {
-	return insertIntoTable[entity.Content](context.Background(), tx, "contents", args.GetNamedArgs())
+func (cr *ContentRepository) InsertContentTx(tx pgx.Tx, args *ContentArguments) (Content, error) {
+	return insertIntoTable[Content](context.Background(), tx, "contents", args.GetNamedArgs())
 }
 
-func (cr *ContentRepository) GetContentsByParentGroupIdOrderByPositionAscending(parentGroupId int64) ([]entity.Content, error) {
-	return selectFromTableWhere[entity.Content](context.Background(), cr.pgxPool, "contents",
+func (cr *ContentRepository) GetContentsByParentGroupIdOrderByPositionAscending(parentGroupId int64) ([]Content, error) {
+	return selectFromTableWhere[Content](context.Background(), cr.pgxPool, "contents",
 		map[string]any{"parent_group_id": parentGroupId}, nil,
 		&orderBy{column: "position", direction: Ascending}, nil)
 }
 
-func (cr *ContentRepository) GetContentsByParentGroupIdOrderByPositionAscendingTx(tx pgx.Tx, parentGroupId int64) ([]entity.Content, error) {
-	return selectFromTableWhere[entity.Content](context.Background(), tx, "contents",
+func (cr *ContentRepository) GetContentsByParentGroupIdOrderByPositionAscendingTx(tx pgx.Tx, parentGroupId int64) ([]Content, error) {
+	return selectFromTableWhere[Content](context.Background(), tx, "contents",
 		map[string]any{"parent_group_id": parentGroupId}, nil, &orderBy{column: "position", direction: Ascending}, nil)
 }
 
-func (cr *ContentRepository) InsertContentAppendTx(tx pgx.Tx, parentGroupId int64, contentType string) (entity.Content, error) {
-	return insertIntoTableAppendPosition[entity.Content](context.Background(), tx, "contents",
+func (cr *ContentRepository) InsertContentAppendTx(tx pgx.Tx, parentGroupId int64, contentType string) (Content, error) {
+	return insertIntoTableAppendPosition[Content](context.Background(), tx, "contents",
 		pgx.NamedArgs{
 			"parent_group_id": parentGroupId,
 			"content_type":    contentType,
@@ -52,7 +73,7 @@ func (cr *ContentRepository) InsertContentAppendTx(tx pgx.Tx, parentGroupId int6
 // sibling and the sibling after that (by parent_group_id, position). If the
 // next sibling is the last one, it's moved to next.position + 1. Returns
 // nil, nil if contentId is already at the highest position in its group.
-func (cr *ContentRepository) IncreaseContentPositionTx(tx pgx.Tx, contentId int64) (*entity.Content, error) {
+func (cr *ContentRepository) IncreaseContentPositionTx(tx pgx.Tx, contentId int64) (*Content, error) {
 	const query = `
 	WITH current AS (
 		SELECT parent_group_id, position
@@ -93,7 +114,7 @@ func (cr *ContentRepository) IncreaseContentPositionTx(tx pgx.Tx, contentId int6
 
 	defer rows.Close()
 
-	result, err := pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[entity.Content])
+	result, err := pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[Content])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil // already at the highest position
@@ -109,7 +130,7 @@ func (cr *ContentRepository) IncreaseContentPositionTx(tx pgx.Tx, contentId int6
 // position). If the previous sibling is the first one, it's moved to
 // prev.position - 1. Returns nil, nil if contentId is already at the
 // lowest position in its group.
-func (cr *ContentRepository) DecreaseContentPositionTx(tx pgx.Tx, contentId int64) (*entity.Content, error) {
+func (cr *ContentRepository) DecreaseContentPositionTx(tx pgx.Tx, contentId int64) (*Content, error) {
 	const query = `
     WITH current AS (
         SELECT parent_group_id, position
@@ -148,7 +169,7 @@ func (cr *ContentRepository) DecreaseContentPositionTx(tx pgx.Tx, contentId int6
 	}
 	defer rows.Close()
 
-	result, err := pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[entity.Content])
+	result, err := pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[Content])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil // already at the lowest position
@@ -159,16 +180,6 @@ func (cr *ContentRepository) DecreaseContentPositionTx(tx pgx.Tx, contentId int6
 }
 
 func (cr *ContentRepository) DeleteContentTx(tx pgx.Tx, contentId int64) error {
-	const query = `
-	DELETE FROM contents
-	WHERE id = @content_id;
-	`
-
-	_, err := tx.Exec(context.Background(), query, pgx.NamedArgs{"content_id": contentId})
-	if err != nil {
-		log.Printf("DeleteContentTx error: %s", err)
-		return err
-	}
-
-	return nil
+	return deleteFromTableWhere(context.Background(), tx, "contents",
+		map[string]any{"id": contentId}, nil)
 }

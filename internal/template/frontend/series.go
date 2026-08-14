@@ -1,14 +1,14 @@
 package frontend
 
 import (
-	"WorksKeeper/internal/repository/entity"
+	"WorksKeeper/internal/repository"
 	"fmt"
 	"html/template"
 	"strconv"
 )
 
 type TemplateSeries struct {
-	Series           *entity.Series
+	Series           *repository.Series
 	TemplateListings []Templatable
 }
 
