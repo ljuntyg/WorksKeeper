@@ -30,16 +30,16 @@ func (mr *MediaRepository) init(pgxPool *pgxpool.Pool) {
 	mr.pgxPool = pgxPool
 }
 
-func (mr *MediaRepository) GetMedia(id int64) (Media, error) {
-	return selectExactlyOneFromTableWhere[Media](context.Background(), mr.pgxPool, "media",
+func (mr *MediaRepository) GetOneMediaById(ctx context.Context, id int64) (Media, error) {
+	return selectExactlyOneFromTableWhere[Media](ctx, mr.pgxPool, "media",
 		map[string]any{"id": id}, nil, nil)
 }
 
-func (mr *MediaRepository) InsertMediaTx(tx pgx.Tx, args *MediaArguments) (Media, error) {
-	return insertIntoTable[Media](context.Background(), tx, "media", args.GetNamedArgs())
+func (mr *MediaRepository) InsertMediaTx(ctx context.Context, tx pgx.Tx, args *MediaArguments) (Media, error) {
+	return insertIntoTable[Media](ctx, tx, "media", args.GetNamedArgs())
 }
 
-func (mr *MediaRepository) GetMediaByContentId(contentId int64) (Media, error) {
-	return selectExactlyOneFromTableWhere[Media](context.Background(), mr.pgxPool, "media",
+func (mr *MediaRepository) GetOneMediaByContentId(ctx context.Context, contentId int64) (Media, error) {
+	return selectExactlyOneFromTableWhere[Media](ctx, mr.pgxPool, "media",
 		map[string]any{"content_id": contentId}, nil, nil)
 }

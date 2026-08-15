@@ -64,15 +64,15 @@ func (fr *FileserverRepository) init(pgxPool *pgxpool.Pool) {
 	fr.pgxPool = pgxPool
 }
 
-func (fr *FileserverRepository) GetFileserver(id int64) (Fileserver, error) {
-	return selectExactlyOneFromTableWhere[Fileserver](context.Background(), fr.pgxPool, "fileservers",
+func (fr *FileserverRepository) GetOneFileserverById(ctx context.Context, id int64) (Fileserver, error) {
+	return selectExactlyOneFromTableWhere[Fileserver](ctx, fr.pgxPool, "fileservers",
 		map[string]any{"id": id}, nil, nil)
 }
 
-// GetFileserverOrderByIdAscending returns the Fileserver uploads are written
+// GetOneFileserverOrderByIdAscending returns the Fileserver uploads are written
 // to. Fileservers are seeded rather than created at runtime, and there is one
 // of them; ordering by id keeps the choice stable if that ever changes.
-func (fr *FileserverRepository) GetFileserverOrderByIdAscending() (Fileserver, error) {
-	return selectExactlyOneFromTableWhere[Fileserver](context.Background(), fr.pgxPool, "fileservers",
+func (fr *FileserverRepository) GetOneFileserverOrderByIdAscending(ctx context.Context) (Fileserver, error) {
+	return selectExactlyOneFromTableWhere[Fileserver](ctx, fr.pgxPool, "fileservers",
 		nil, nil, &orderBy{column: "id", direction: Ascending})
 }

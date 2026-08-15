@@ -3,6 +3,7 @@ package service
 import (
 	"WorksKeeper/internal/repository"
 	"WorksKeeper/internal/template"
+	"context"
 )
 
 type HomeService struct {
@@ -13,10 +14,10 @@ func (hs *HomeService) Init(repos *repository.RepositoryCollection) {
 	hs.repos = repos
 }
 
-func (hs *HomeService) GetTemplateData() template.Executable {
-	templateCollection := mustBuildTemplateCollectionShallow(1, hs.repos)
-	templateSeries := mustAttachTemplateSeries(templateCollection, hs.repos)
-	mustAttachTemplateListings(templateSeries, hs.repos)
+func (hs *HomeService) GetTemplateData(ctx context.Context) template.Executable {
+	templateCollection := mustBuildTemplateCollectionShallow(ctx, 1, hs.repos)
+	templateSeries := mustAttachTemplateSeries(ctx, templateCollection, hs.repos)
+	mustAttachTemplateListings(ctx, templateSeries, hs.repos)
 
 	return &template.HomeData{
 		TemplateCollection: templateCollection,
@@ -28,12 +29,12 @@ func (hs *HomeService) GetTemplateData() template.Executable {
 	nbrWorks := n / 2
 	nbrSeries := n - nbrWorks
 
-	works, err := hs.workRepo.GetNWorks(nbrWorks)
+	works, err := hs.workRepo.GetWorksLimitN(nbrWorks)
 	if err != nil {
 		panic("unexpected error getting Works")
 	}
 
-	series, err := hs.seriesRepo.GetNSeries(nbrSeries)
+	series, err := hs.seriesRepo.GetSeriesLimitN(nbrSeries)
 	if err != nil {
 		panic("unexpected error getting Series")
 	}

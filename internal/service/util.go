@@ -3,6 +3,7 @@ package service
 import (
 	"WorksKeeper/internal/repository"
 	"WorksKeeper/internal/template/frontend"
+	"context"
 	"log"
 
 	"github.com/jackc/pgx/v5"
@@ -11,10 +12,10 @@ import (
 // *
 // * COLLECTION COLLECTION COLLECTION
 // *
-func mustInsertNewTemplateCollection(tx pgx.Tx, repos *repository.RepositoryCollection) *frontend.TemplateCollection {
-	rootSeries := mustInsertNewTemplateSeries(tx, nil, repos)
+func mustInsertNewTemplateCollection(ctx context.Context, tx pgx.Tx, repos *repository.RepositoryCollection) *frontend.TemplateCollection {
+	rootSeries := mustInsertNewTemplateSeries(ctx, tx, nil, repos)
 
-	collection, err := repos.CollectionRepo.InsertCollectionTx(tx, &repository.CollectionArguments{
+	collection, err := repos.CollectionRepo.InsertCollectionTx(ctx, tx, &repository.CollectionArguments{
 		RootSeriesId: rootSeries.Series.Id,
 	})
 
@@ -29,8 +30,8 @@ func mustInsertNewTemplateCollection(tx pgx.Tx, repos *repository.RepositoryColl
 	}
 }
 
-func mustBuildTemplateCollectionShallow(collectionId int64, repos *repository.RepositoryCollection) *frontend.TemplateCollection {
-	collection, err := repos.CollectionRepo.GetCollection(collectionId)
+func mustBuildTemplateCollectionShallow(ctx context.Context, collectionId int64, repos *repository.RepositoryCollection) *frontend.TemplateCollection {
+	collection, err := repos.CollectionRepo.GetOneCollectionById(ctx, collectionId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Collection")
@@ -45,15 +46,15 @@ func mustBuildTemplateCollectionShallow(collectionId int64, repos *repository.Re
 // *
 // * SERIES SERIES SERIES
 // *
-func mustInsertNewTemplateSeriesListing(tx pgx.Tx, parentSeriesId int64, repos *repository.RepositoryCollection) *frontend.TemplateListing {
-	listing, err := repos.ListingRepo.InsertListingAppendTx(tx, parentSeriesId, "series")
+func mustInsertNewTemplateSeriesListing(ctx context.Context, tx pgx.Tx, parentSeriesId int64, repos *repository.RepositoryCollection) *frontend.TemplateListing {
+	listing, err := repos.ListingRepo.AppendListingToSeriesTx(ctx, tx, parentSeriesId, "series")
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error inserting new Listing")
 	}
 
 	listingId := listing.Id
-	templateSeries := mustInsertNewTemplateSeries(tx, &listingId, repos)
+	templateSeries := mustInsertNewTemplateSeries(ctx, tx, &listingId, repos)
 
 	return &frontend.TemplateListing{
 		Listing:              &listing,
@@ -61,8 +62,8 @@ func mustInsertNewTemplateSeriesListing(tx pgx.Tx, parentSeriesId int64, repos *
 	}
 }
 
-func mustInsertNewTemplateSeries(tx pgx.Tx, listingId *int64, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
-	series, err := repos.SeriesRepo.InsertSeriesTx(tx, &repository.SeriesArguments{
+func mustInsertNewTemplateSeries(ctx context.Context, tx pgx.Tx, listingId *int64, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
+	series, err := repos.SeriesRepo.InsertSeriesTx(ctx, tx, &repository.SeriesArguments{
 		ListingId: listingId,
 	})
 
@@ -77,14 +78,14 @@ func mustInsertNewTemplateSeries(tx pgx.Tx, listingId *int64, repos *repository.
 	}
 }
 
-func mustAttachTemplateSeries(tc *frontend.TemplateCollection, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
-	templateSeries := mustBuildTemplateSeriesShallow(tc.Collection.RootSeriesId, repos)
+func mustAttachTemplateSeries(ctx context.Context, tc *frontend.TemplateCollection, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
+	templateSeries := mustBuildTemplateSeriesShallow(ctx, tc.Collection.RootSeriesId, repos)
 	tc.TemplateSeries = templateSeries
 	return templateSeries
 }
 
-func mustBuildTemplateSeriesShallow(seriesId int64, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
-	series, err := repos.SeriesRepo.GetSeries(seriesId)
+func mustBuildTemplateSeriesShallow(ctx context.Context, seriesId int64, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
+	series, err := repos.SeriesRepo.GetOneSeriesById(ctx, seriesId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Series")
@@ -96,18 +97,18 @@ func mustBuildTemplateSeriesShallow(seriesId int64, repos *repository.Repository
 	}
 }
 
-func mustFillTemplateSeries(ts *frontend.TemplateSeries, repos *repository.RepositoryCollection) {
-	listings := mustAttachTemplateListings(ts, repos)
+func mustFillTemplateSeries(ctx context.Context, ts *frontend.TemplateSeries, repos *repository.RepositoryCollection) {
+	listings := mustAttachTemplateListings(ctx, ts, repos)
 	for _, tl := range listings {
-		mustFillTemplateListing(tl, repos)
+		mustFillTemplateListing(ctx, tl, repos)
 	}
 }
 
 // *
 // * LISTING LISTING LISTING
 // *
-func mustAttachTemplateListings(ts *frontend.TemplateSeries, repos *repository.RepositoryCollection) []*frontend.TemplateListing {
-	templateListings := mustBuildTemplateListingsShallow(ts.Series.Id, repos)
+func mustAttachTemplateListings(ctx context.Context, ts *frontend.TemplateSeries, repos *repository.RepositoryCollection) []*frontend.TemplateListing {
+	templateListings := mustBuildTemplateListingsShallow(ctx, ts.Series.Id, repos)
 
 	templatables := make([]frontend.Templatable, len(templateListings))
 	for i, tl := range templateListings {
@@ -118,8 +119,8 @@ func mustAttachTemplateListings(ts *frontend.TemplateSeries, repos *repository.R
 	return templateListings
 }
 
-func mustBuildTemplateListingsShallow(parentSeriesId int64, repos *repository.RepositoryCollection) []*frontend.TemplateListing {
-	listings, err := repos.ListingRepo.GetListingsByParentSeriesIdOrderByPositionAscending(parentSeriesId)
+func mustBuildTemplateListingsShallow(ctx context.Context, parentSeriesId int64, repos *repository.RepositoryCollection) []*frontend.TemplateListing {
+	listings, err := repos.ListingRepo.GetListingsByParentSeriesIdOrderByPositionAscending(ctx, parentSeriesId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Listings for Series")
@@ -131,21 +132,21 @@ func mustBuildTemplateListingsShallow(parentSeriesId int64, repos *repository.Re
 		var templateWorkOrSeries frontend.Listable
 		switch listing.ListingType {
 		case "work":
-			work, err := repos.WorkRepo.GetWorkByListingId(listing.Id)
+			work, err := repos.WorkRepo.GetOneWorkByListingId(ctx, listing.Id)
 			if err != nil {
 				log.Println(err)
 				panic("unexpected error getting Work for Listing")
 			}
 
-			templateWorkOrSeries = mustBuildTemplateWorkShallow(work.Id, repos)
+			templateWorkOrSeries = mustBuildTemplateWorkShallow(ctx, work.Id, repos)
 		case "series":
-			series, err := repos.SeriesRepo.GetSeriesByListingId(listing.Id)
+			series, err := repos.SeriesRepo.GetOneSeriesByListingId(ctx, listing.Id)
 			if err != nil {
 				log.Println(err)
 				panic("unexpected error getting Series for Listing")
 			}
 
-			templateWorkOrSeries = mustBuildTemplateSeriesShallow(series.Id, repos)
+			templateWorkOrSeries = mustBuildTemplateSeriesShallow(ctx, series.Id, repos)
 		default:
 			panic("unexpected Listing type")
 		}
@@ -159,33 +160,33 @@ func mustBuildTemplateListingsShallow(parentSeriesId int64, repos *repository.Re
 	return templateListings
 }
 
-func mustFillTemplateListing(tl *frontend.TemplateListing, repos *repository.RepositoryCollection) {
+func mustFillTemplateListing(ctx context.Context, tl *frontend.TemplateListing, repos *repository.RepositoryCollection) {
 	switch v := tl.TemplateWorkOrSeries.(type) {
 	case *frontend.TemplateWork:
-		mustFillTemplateWork(v, repos)
+		mustFillTemplateWork(ctx, v, repos)
 	case *frontend.TemplateSeries:
-		mustFillTemplateSeries(v, repos) // recurse
+		mustFillTemplateSeries(ctx, v, repos) // recurse
 	}
 }
 
 // *
 // * WORK WORK WORK
 // *
-func mustInsertNewTemplateWorkListing(tx pgx.Tx, parentSeriesId int64, repos *repository.RepositoryCollection) *frontend.TemplateListing {
-	listing, err := repos.ListingRepo.InsertListingAppendTx(tx, parentSeriesId, "work")
+func mustInsertNewTemplateWorkListing(ctx context.Context, tx pgx.Tx, parentSeriesId int64, repos *repository.RepositoryCollection) *frontend.TemplateListing {
+	listing, err := repos.ListingRepo.AppendListingToSeriesTx(ctx, tx, parentSeriesId, "work")
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error inserting new Listing")
 	}
-	templateWork := mustInsertNewTemplateWork(tx, listing.Id, repos)
+	templateWork := mustInsertNewTemplateWork(ctx, tx, listing.Id, repos)
 	return &frontend.TemplateListing{
 		Listing:              &listing,
 		TemplateWorkOrSeries: templateWork,
 	}
 }
 
-func mustInsertNewTemplateWork(tx pgx.Tx, listingId int64, repos *repository.RepositoryCollection) *frontend.TemplateWork {
-	work, err := repos.WorkRepo.InsertWorkTx(tx, &repository.WorkArguments{
+func mustInsertNewTemplateWork(ctx context.Context, tx pgx.Tx, listingId int64, repos *repository.RepositoryCollection) *frontend.TemplateWork {
+	work, err := repos.WorkRepo.InsertWorkTx(ctx, tx, &repository.WorkArguments{
 		ListingId: listingId,
 		Title:     "Untitled Work",
 	})
@@ -195,7 +196,7 @@ func mustInsertNewTemplateWork(tx pgx.Tx, listingId int64, repos *repository.Rep
 		panic("unexpected error inserting new Work")
 	}
 
-	templateCanvas := mustInsertNewTemplateCanvas(tx, work.Id, repos)
+	templateCanvas := mustInsertNewTemplateCanvas(ctx, tx, work.Id, repos)
 
 	return &frontend.TemplateWork{
 		Work:           &work,
@@ -203,8 +204,8 @@ func mustInsertNewTemplateWork(tx pgx.Tx, listingId int64, repos *repository.Rep
 	}
 }
 
-func mustBuildTemplateWorkShallow(workId int64, repos *repository.RepositoryCollection) *frontend.TemplateWork {
-	work, err := repos.WorkRepo.GetWork(workId)
+func mustBuildTemplateWorkShallow(ctx context.Context, workId int64, repos *repository.RepositoryCollection) *frontend.TemplateWork {
+	work, err := repos.WorkRepo.GetOneWorkById(ctx, workId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Work")
@@ -216,16 +217,16 @@ func mustBuildTemplateWorkShallow(workId int64, repos *repository.RepositoryColl
 	}
 }
 
-func mustFillTemplateWork(tw *frontend.TemplateWork, repos *repository.RepositoryCollection) {
-	tc := mustAttachTemplateCanvas(tw, repos)
-	mustFillTemplateCanvas(tc, repos)
+func mustFillTemplateWork(ctx context.Context, tw *frontend.TemplateWork, repos *repository.RepositoryCollection) {
+	tc := mustAttachTemplateCanvas(ctx, tw, repos)
+	mustFillTemplateCanvas(ctx, tc, repos)
 }
 
 // *
 // * CANVAS CANVAS CANVAS
 // *
-func mustInsertNewTemplateCanvas(tx pgx.Tx, workId int64, repos *repository.RepositoryCollection) *frontend.TemplateCanvas {
-	canvas, err := repos.CanvasRepo.InsertCanvasTx(tx, &repository.CanvasArguments{
+func mustInsertNewTemplateCanvas(ctx context.Context, tx pgx.Tx, workId int64, repos *repository.RepositoryCollection) *frontend.TemplateCanvas {
+	canvas, err := repos.CanvasRepo.InsertCanvasTx(ctx, tx, &repository.CanvasArguments{
 		WorkId: workId,
 	})
 
@@ -234,7 +235,7 @@ func mustInsertNewTemplateCanvas(tx pgx.Tx, workId int64, repos *repository.Repo
 		panic("unexpected error inserting new Canvas")
 	}
 
-	templateGroup := mustInsertNewRootTemplateGroup(tx, canvas.Id, repos)
+	templateGroup := mustInsertNewRootTemplateGroup(ctx, tx, canvas.Id, repos)
 
 	return &frontend.TemplateCanvas{
 		Canvas:        &canvas,
@@ -242,8 +243,8 @@ func mustInsertNewTemplateCanvas(tx pgx.Tx, workId int64, repos *repository.Repo
 	}
 }
 
-func mustAttachTemplateCanvas(tw *frontend.TemplateWork, repos *repository.RepositoryCollection) *frontend.TemplateCanvas {
-	canvas, err := repos.CanvasRepo.GetCanvasByWorkId(tw.Work.Id)
+func mustAttachTemplateCanvas(ctx context.Context, tw *frontend.TemplateWork, repos *repository.RepositoryCollection) *frontend.TemplateCanvas {
+	canvas, err := repos.CanvasRepo.GetOneCanvasByWorkId(ctx, tw.Work.Id)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Canvas")
@@ -258,22 +259,22 @@ func mustAttachTemplateCanvas(tw *frontend.TemplateWork, repos *repository.Repos
 	return templateCanvas
 }
 
-func mustFillTemplateCanvas(tc *frontend.TemplateCanvas, repos *repository.RepositoryCollection) {
-	tg := mustAttachTemplateGroup(tc, repos)
-	mustFillTemplateGroup(tg, repos)
+func mustFillTemplateCanvas(ctx context.Context, tc *frontend.TemplateCanvas, repos *repository.RepositoryCollection) {
+	tg := mustAttachTemplateGroup(ctx, tc, repos)
+	mustFillTemplateGroup(ctx, tg, repos)
 }
 
 // *
 // * GROUP GROUP GROUP
 // *
-func mustInsertNewTemplateGroupContent(tx pgx.Tx, parentGroupId int64, repos *repository.RepositoryCollection) *frontend.TemplateContent {
-	content, err := repos.ContentRepo.InsertContentAppendTx(tx, parentGroupId, "group")
+func mustInsertNewTemplateGroupContent(ctx context.Context, tx pgx.Tx, parentGroupId int64, repos *repository.RepositoryCollection) *frontend.TemplateContent {
+	content, err := repos.ContentRepo.AppendContentToGroupTx(ctx, tx, parentGroupId, "group")
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error inserting new Content")
 	}
 
-	templateGroup := mustInsertNewNestedTemplateGroup(tx, content.Id, repos)
+	templateGroup := mustInsertNewNestedTemplateGroup(ctx, tx, content.Id, repos)
 
 	return &frontend.TemplateContent{
 		Content:                    &content,
@@ -283,8 +284,8 @@ func mustInsertNewTemplateGroupContent(tx pgx.Tx, parentGroupId int64, repos *re
 
 // A Group's parent is either a Canvas (root) or a Content (nested), never both
 // and never neither — mirroring the CHECK constraint on the groups table.
-func mustInsertNewRootTemplateGroup(tx pgx.Tx, canvasId int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
-	group, err := repos.GroupRepo.InsertGroupTx(tx, &repository.GroupArguments{
+func mustInsertNewRootTemplateGroup(ctx context.Context, tx pgx.Tx, canvasId int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
+	group, err := repos.GroupRepo.InsertGroupTx(ctx, tx, &repository.GroupArguments{
 		CanvasId:      &canvasId,
 		ContentId:     nil,
 		SwapDirection: false,
@@ -301,8 +302,8 @@ func mustInsertNewRootTemplateGroup(tx pgx.Tx, canvasId int64, repos *repository
 	}
 }
 
-func mustInsertNewNestedTemplateGroup(tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
-	group, err := repos.GroupRepo.InsertGroupTx(tx, &repository.GroupArguments{
+func mustInsertNewNestedTemplateGroup(ctx context.Context, tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
+	group, err := repos.GroupRepo.InsertGroupTx(ctx, tx, &repository.GroupArguments{
 		CanvasId:      nil,
 		ContentId:     &contentId,
 		SwapDirection: false,
@@ -319,8 +320,8 @@ func mustInsertNewNestedTemplateGroup(tx pgx.Tx, contentId int64, repos *reposit
 	}
 }
 
-func mustAttachTemplateGroup(tc *frontend.TemplateCanvas, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
-	group, err := repos.GroupRepo.GetRootGroupByCanvasId(tc.Canvas.Id)
+func mustAttachTemplateGroup(ctx context.Context, tc *frontend.TemplateCanvas, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
+	group, err := repos.GroupRepo.GetOneGroupByCanvasId(ctx, tc.Canvas.Id)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Group")
@@ -335,8 +336,8 @@ func mustAttachTemplateGroup(tc *frontend.TemplateCanvas, repos *repository.Repo
 	return templateGroup
 }
 
-func mustBuildTemplateGroupShallow(groupId int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
-	group, err := repos.GroupRepo.GetGroup(groupId)
+func mustBuildTemplateGroupShallow(ctx context.Context, groupId int64, repos *repository.RepositoryCollection) *frontend.TemplateGroup {
+	group, err := repos.GroupRepo.GetOneGroupById(ctx, groupId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Group")
@@ -348,18 +349,18 @@ func mustBuildTemplateGroupShallow(groupId int64, repos *repository.RepositoryCo
 	}
 }
 
-func mustFillTemplateGroup(tg *frontend.TemplateGroup, repos *repository.RepositoryCollection) {
-	contents := mustAttachTemplateContents(tg, repos)
+func mustFillTemplateGroup(ctx context.Context, tg *frontend.TemplateGroup, repos *repository.RepositoryCollection) {
+	contents := mustAttachTemplateContents(ctx, tg, repos)
 	for _, tc := range contents {
-		mustFillTemplateContent(tc, repos)
+		mustFillTemplateContent(ctx, tc, repos)
 	}
 }
 
 // *
 // * CONTENT CONTENT CONTENT
 // *
-func mustAttachTemplateContents(tg *frontend.TemplateGroup, repos *repository.RepositoryCollection) []*frontend.TemplateContent {
-	templateContents := mustBuildTemplateContentsShallow(tg.Group.Id, repos)
+func mustAttachTemplateContents(ctx context.Context, tg *frontend.TemplateGroup, repos *repository.RepositoryCollection) []*frontend.TemplateContent {
+	templateContents := mustBuildTemplateContentsShallow(ctx, tg.Group.Id, repos)
 
 	templatables := make([]frontend.Templatable, len(templateContents))
 	for i, tc := range templateContents {
@@ -370,8 +371,8 @@ func mustAttachTemplateContents(tg *frontend.TemplateGroup, repos *repository.Re
 	return templateContents
 }
 
-func mustBuildTemplateContentsShallow(parentGroupId int64, repos *repository.RepositoryCollection) []*frontend.TemplateContent {
-	contents, err := repos.ContentRepo.GetContentsByParentGroupIdOrderByPositionAscending(parentGroupId)
+func mustBuildTemplateContentsShallow(ctx context.Context, parentGroupId int64, repos *repository.RepositoryCollection) []*frontend.TemplateContent {
+	contents, err := repos.ContentRepo.GetContentsByParentGroupIdOrderByPositionAscending(ctx, parentGroupId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Contents for Group")
@@ -383,29 +384,29 @@ func mustBuildTemplateContentsShallow(parentGroupId int64, repos *repository.Rep
 		var templateGroupOrTextOrMedia frontend.Templatable
 		switch content.ContentType {
 		case "group":
-			group, err := repos.GroupRepo.GetGroupByContentId(content.Id)
+			group, err := repos.GroupRepo.GetOneGroupByContentId(ctx, content.Id)
 			if err != nil {
 				log.Println(err)
 				panic("unexpected error getting Group for Content")
 			}
 
-			templateGroupOrTextOrMedia = mustBuildTemplateGroupShallow(group.Id, repos)
+			templateGroupOrTextOrMedia = mustBuildTemplateGroupShallow(ctx, group.Id, repos)
 		case "text":
-			text, err := repos.TextRepo.GetTextByContentId(content.Id)
+			text, err := repos.TextRepo.GetOneTextByContentId(ctx, content.Id)
 			if err != nil {
 				log.Println(err)
 				panic("unexpected error getting Text for Content")
 			}
 
-			templateGroupOrTextOrMedia = mustBuildTemplateTextShallow(text.Id, repos)
+			templateGroupOrTextOrMedia = mustBuildTemplateTextShallow(ctx, text.Id, repos)
 		case "media":
-			media, err := repos.MediaRepo.GetMediaByContentId(content.Id)
+			media, err := repos.MediaRepo.GetOneMediaByContentId(ctx, content.Id)
 			if err != nil {
 				log.Println(err)
 				panic("unexpected error getting Media for Content")
 			}
 
-			templateGroupOrTextOrMedia = mustBuildTemplateMediaShallow(media.Id, repos)
+			templateGroupOrTextOrMedia = mustBuildTemplateMediaShallow(ctx, media.Id, repos)
 		default:
 			panic("unexpected Content type")
 		}
@@ -419,28 +420,28 @@ func mustBuildTemplateContentsShallow(parentGroupId int64, repos *repository.Rep
 	return templateContents
 }
 
-func mustFillTemplateContent(tc *frontend.TemplateContent, repos *repository.RepositoryCollection) {
+func mustFillTemplateContent(ctx context.Context, tc *frontend.TemplateContent, repos *repository.RepositoryCollection) {
 	switch v := tc.TemplateGroupOrTextOrMedia.(type) {
 	case *frontend.TemplateGroup:
-		mustFillTemplateGroup(v, repos) // recurse
+		mustFillTemplateGroup(ctx, v, repos) // recurse
 	case *frontend.TemplateText:
 		// leaf, nothing to do
 	case *frontend.TemplateMedia:
-		mustAttachTemplateCaption(v, repos)
+		mustAttachTemplateCaption(ctx, v, repos)
 	}
 }
 
 // *
 // * TEXT TEXT TEXT
 // *
-func mustInsertNewTemplateTextContent(tx pgx.Tx, parentGroupId int64, repos *repository.RepositoryCollection) *frontend.TemplateContent {
-	content, err := repos.ContentRepo.InsertContentAppendTx(tx, parentGroupId, "text")
+func mustInsertNewTemplateTextContent(ctx context.Context, tx pgx.Tx, parentGroupId int64, repos *repository.RepositoryCollection) *frontend.TemplateContent {
+	content, err := repos.ContentRepo.AppendContentToGroupTx(ctx, tx, parentGroupId, "text")
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error inserting new Content")
 	}
 
-	templateText := mustInsertNewTemplateText(tx, content.Id, repos)
+	templateText := mustInsertNewTemplateText(ctx, tx, content.Id, repos)
 
 	return &frontend.TemplateContent{
 		Content:                    &content,
@@ -448,8 +449,8 @@ func mustInsertNewTemplateTextContent(tx pgx.Tx, parentGroupId int64, repos *rep
 	}
 }
 
-func mustInsertNewTemplateText(tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateText {
-	text, err := repos.TextRepo.InsertTextTx(tx, &repository.TextArguments{
+func mustInsertNewTemplateText(ctx context.Context, tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateText {
+	text, err := repos.TextRepo.InsertTextTx(ctx, tx, &repository.TextArguments{
 		ContentId: contentId,
 		Content:   "",
 	})
@@ -466,8 +467,8 @@ func mustInsertNewTemplateText(tx pgx.Tx, contentId int64, repos *repository.Rep
 
 // Text is a leaf — "shallow" is also "full", but named for consistency
 // with how it's referenced from mustBuildTemplateContentsShallow.
-func mustBuildTemplateTextShallow(textId int64, repos *repository.RepositoryCollection) *frontend.TemplateText {
-	text, err := repos.TextRepo.GetText(textId)
+func mustBuildTemplateTextShallow(ctx context.Context, textId int64, repos *repository.RepositoryCollection) *frontend.TemplateText {
+	text, err := repos.TextRepo.GetOneTextById(ctx, textId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Text")
@@ -483,14 +484,14 @@ func mustBuildTemplateTextShallow(textId int64, repos *repository.RepositoryColl
 // *
 // Sources are always fetched (cheap, always wanted); TemplateCaption is left
 // nil since a Media may have no Caption — attach separately.
-func mustInsertNewTemplateMediaContent(tx pgx.Tx, parentGroupId int64, repos *repository.RepositoryCollection) *frontend.TemplateContent {
-	content, err := repos.ContentRepo.InsertContentAppendTx(tx, parentGroupId, "media")
+func mustInsertNewTemplateMediaContent(ctx context.Context, tx pgx.Tx, parentGroupId int64, repos *repository.RepositoryCollection) *frontend.TemplateContent {
+	content, err := repos.ContentRepo.AppendContentToGroupTx(ctx, tx, parentGroupId, "media")
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error inserting new Content")
 	}
 
-	templateMedia := mustInsertNewTemplateMedia(tx, content.Id, repos)
+	templateMedia := mustInsertNewTemplateMedia(ctx, tx, content.Id, repos)
 
 	return &frontend.TemplateContent{
 		Content:                    &content,
@@ -498,8 +499,8 @@ func mustInsertNewTemplateMediaContent(tx pgx.Tx, parentGroupId int64, repos *re
 	}
 }
 
-func mustInsertNewTemplateMedia(tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateMedia {
-	media, err := repos.MediaRepo.InsertMediaTx(tx, &repository.MediaArguments{
+func mustInsertNewTemplateMedia(ctx context.Context, tx pgx.Tx, contentId int64, repos *repository.RepositoryCollection) *frontend.TemplateMedia {
+	media, err := repos.MediaRepo.InsertMediaTx(ctx, tx, &repository.MediaArguments{
 		ContentId: contentId,
 	})
 
@@ -513,14 +514,14 @@ func mustInsertNewTemplateMedia(tx pgx.Tx, contentId int64, repos *repository.Re
 	}
 }
 
-func mustBuildTemplateMediaShallow(mediaId int64, repos *repository.RepositoryCollection) *frontend.TemplateMedia {
-	media, err := repos.MediaRepo.GetMedia(mediaId)
+func mustBuildTemplateMediaShallow(ctx context.Context, mediaId int64, repos *repository.RepositoryCollection) *frontend.TemplateMedia {
+	media, err := repos.MediaRepo.GetOneMediaById(ctx, mediaId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Media")
 	}
 
-	sources, err := repos.SourceRepo.GetSourcesByMediaId(media.Id)
+	sources, err := repos.SourceRepo.GetSourcesByMediaId(ctx, media.Id)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Sources for Media")
@@ -528,7 +529,7 @@ func mustBuildTemplateMediaShallow(mediaId int64, repos *repository.RepositoryCo
 
 	templateSources := make([]frontend.Templatable, 0, len(sources))
 	for i := range sources {
-		templateSources = append(templateSources, mustBuildTemplateSource(&sources[i], repos))
+		templateSources = append(templateSources, mustBuildTemplateSource(ctx, &sources[i], repos))
 	}
 
 	return &frontend.TemplateMedia{
@@ -543,8 +544,8 @@ func mustBuildTemplateMediaShallow(mediaId int64, repos *repository.RepositoryCo
 // *
 // A Caption belongs to a single Media — captions.media_id is unique — so it is
 // inserted against the Media it captions rather than appended to a Group.
-func mustInsertNewTemplateCaption(tx pgx.Tx, mediaId int64, repos *repository.RepositoryCollection) *frontend.TemplateCaption {
-	caption, err := repos.CaptionRepo.InsertCaptionTx(tx, &repository.CaptionArguments{
+func mustInsertNewTemplateCaption(ctx context.Context, tx pgx.Tx, mediaId int64, repos *repository.RepositoryCollection) *frontend.TemplateCaption {
+	caption, err := repos.CaptionRepo.InsertCaptionTx(ctx, tx, &repository.CaptionArguments{
 		MediaId: mediaId,
 		Content: "",
 	})
@@ -562,8 +563,8 @@ func mustInsertNewTemplateCaption(tx pgx.Tx, mediaId int64, repos *repository.Re
 // Nil if the Media has no caption. Leaves tm.TemplateCaption untouched in that
 // case: assigning a nil *TemplateCaption would make the Templatable interface
 // non-nil, and templates guarding on it would then dereference nil.
-func mustAttachTemplateCaption(tm *frontend.TemplateMedia, repos *repository.RepositoryCollection) *frontend.TemplateCaption {
-	caption, err := repos.CaptionRepo.GetCaptionByMediaId(tm.Media.Id)
+func mustAttachTemplateCaption(ctx context.Context, tm *frontend.TemplateMedia, repos *repository.RepositoryCollection) *frontend.TemplateCaption {
+	caption, err := repos.CaptionRepo.GetOptionalCaptionByMediaId(ctx, tm.Media.Id)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Caption")
@@ -588,26 +589,26 @@ func mustAttachTemplateCaption(tm *frontend.TemplateMedia, repos *repository.Rep
 // which belongs to a File, which is stored on one or more Fileservers as
 // Filenodes. Rendering a Source needs the whole walk, because the url is
 // assembled from the Fileserver and the path the Filenode has on it.
-func mustBuildTemplateSource(source *repository.Source, repos *repository.RepositoryCollection) *frontend.TemplateSource {
-	filename, err := repos.FilenameRepo.GetFilename(source.FilenameId)
+func mustBuildTemplateSource(ctx context.Context, source *repository.Source, repos *repository.RepositoryCollection) *frontend.TemplateSource {
+	filename, err := repos.FilenameRepo.GetOneFilenameById(ctx, source.FilenameId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Filename for Source")
 	}
 
-	file, err := repos.FileRepo.GetFile(filename.FileId)
+	file, err := repos.FileRepo.GetOneFileById(ctx, filename.FileId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting File for Filename")
 	}
 
-	filenode, err := repos.FilenodeRepo.GetFilenodeByFileIdOrderByIdAscending(file.Id)
+	filenode, err := repos.FilenodeRepo.GetOneFilenodeByFileIdOrderByIdAscending(ctx, file.Id)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Filenode for File")
 	}
 
-	fileserver, err := repos.FileserverRepo.GetFileserver(filenode.FileserverId)
+	fileserver, err := repos.FileserverRepo.GetOneFileserverById(ctx, filenode.FileserverId)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Fileserver for Filenode")

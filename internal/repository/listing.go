@@ -37,22 +37,24 @@ func (lr *ListingRepository) init(pgxPool *pgxpool.Pool) {
 	lr.pgxPool = pgxPool
 }
 
-func (lr *ListingRepository) InsertListingTx(tx pgx.Tx, args *ListingArguments) (Listing, error) {
-	return insertIntoTable[Listing](context.Background(), tx, "listings", args.GetNamedArgs())
+func (lr *ListingRepository) InsertListingTx(ctx context.Context, tx pgx.Tx, args *ListingArguments) (Listing, error) {
+	return insertIntoTable[Listing](ctx, tx, "listings", args.GetNamedArgs())
 }
 
-func (lr *ListingRepository) GetListingsByParentSeriesIdOrderByPositionAscending(parentSeriesId int64) ([]Listing, error) {
-	return selectFromTableWhere[Listing](context.Background(), lr.pgxPool, "listings",
+func (lr *ListingRepository) GetListingsByParentSeriesIdOrderByPositionAscending(ctx context.Context, parentSeriesId int64) ([]Listing, error) {
+	return selectFromTableWhere[Listing](ctx, lr.pgxPool, "listings",
 		map[string]any{"parent_series_id": parentSeriesId}, nil, &orderBy{column: "position", direction: Ascending}, nil)
 }
 
-func (lr *ListingRepository) GetListingsByParentSeriesIdOrderByPositionAscendingTx(tx pgx.Tx, parentSeriesId int64) ([]Listing, error) {
-	return selectFromTableWhere[Listing](context.Background(), tx, "listings",
+func (lr *ListingRepository) GetListingsByParentSeriesIdOrderByPositionAscendingTx(ctx context.Context, tx pgx.Tx, parentSeriesId int64) ([]Listing, error) {
+	return selectFromTableWhere[Listing](ctx, tx, "listings",
 		map[string]any{"parent_series_id": parentSeriesId}, nil, &orderBy{column: "position", direction: Ascending}, nil)
 }
 
-func (lr *ListingRepository) InsertListingAppendTx(tx pgx.Tx, parentSeriesId int64, listingType string) (Listing, error) {
-	return insertIntoTableAppendPosition[Listing](context.Background(), tx, "listings",
+// AppendListingToSeriesTx inserts a Listing at the end of its parent Series,
+// computing the next position rather than taking one.
+func (lr *ListingRepository) AppendListingToSeriesTx(ctx context.Context, tx pgx.Tx, parentSeriesId int64, listingType string) (Listing, error) {
+	return insertIntoTableAppendPosition[Listing](ctx, tx, "listings",
 		pgx.NamedArgs{
 			"parent_series_id": parentSeriesId,
 			"listing_type":     listingType,

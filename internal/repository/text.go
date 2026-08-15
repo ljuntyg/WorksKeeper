@@ -33,21 +33,21 @@ func (tr *TextRepository) init(pgxPool *pgxpool.Pool) {
 	tr.pgxPool = pgxPool
 }
 
-func (tr *TextRepository) GetText(id int64) (Text, error) {
-	return selectExactlyOneFromTableWhere[Text](context.Background(), tr.pgxPool, "texts",
+func (tr *TextRepository) GetOneTextById(ctx context.Context, id int64) (Text, error) {
+	return selectExactlyOneFromTableWhere[Text](ctx, tr.pgxPool, "texts",
 		map[string]any{"id": id}, nil, nil)
 }
 
-func (tr *TextRepository) InsertTextTx(tx pgx.Tx, args *TextArguments) (Text, error) {
-	return insertIntoTable[Text](context.Background(), tx, "texts", args.GetNamedArgs())
+func (tr *TextRepository) InsertTextTx(ctx context.Context, tx pgx.Tx, args *TextArguments) (Text, error) {
+	return insertIntoTable[Text](ctx, tx, "texts", args.GetNamedArgs())
 }
 
-func (tr *TextRepository) GetTextByContentId(contentId int64) (Text, error) {
-	return selectExactlyOneFromTableWhere[Text](context.Background(), tr.pgxPool, "texts",
+func (tr *TextRepository) GetOneTextByContentId(ctx context.Context, contentId int64) (Text, error) {
+	return selectExactlyOneFromTableWhere[Text](ctx, tr.pgxPool, "texts",
 		map[string]any{"content_id": contentId}, nil, nil)
 }
 
-func (tr *TextRepository) UpdateTextContentTx(tx pgx.Tx, textId int64, content string) (Text, error) {
-	return updateExactlyOneTableWhere[Text](context.Background(), tx, "texts",
+func (tr *TextRepository) UpdateTextSetContentByIdTx(ctx context.Context, tx pgx.Tx, textId int64, content string) (Text, error) {
+	return updateExactlyOneTableWhere[Text](ctx, tx, "texts",
 		map[string]any{"content": content}, map[string]any{"id": textId}, nil)
 }

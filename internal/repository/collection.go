@@ -32,11 +32,11 @@ func (cr *CollectionRepository) init(pgxPool *pgxpool.Pool) {
 	cr.pgxPool = pgxPool
 }
 
-func (cr *CollectionRepository) GetCollection(id int64) (Collection, error) {
-	return selectExactlyOneFromTableWhere[Collection](context.Background(), cr.pgxPool, "collections",
+func (cr *CollectionRepository) GetOneCollectionById(ctx context.Context, id int64) (Collection, error) {
+	return selectExactlyOneFromTableWhere[Collection](ctx, cr.pgxPool, "collections",
 		map[string]any{"id": id}, nil, nil)
 }
 
-func (cr *CollectionRepository) InsertCollectionTx(tx pgx.Tx, args *CollectionArguments) (Collection, error) {
-	return insertIntoTable[Collection](context.Background(), tx, "collections", args.GetNamedArgs())
+func (cr *CollectionRepository) InsertCollectionTx(ctx context.Context, tx pgx.Tx, args *CollectionArguments) (Collection, error) {
+	return insertIntoTable[Collection](ctx, tx, "collections", args.GetNamedArgs())
 }

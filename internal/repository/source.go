@@ -33,11 +33,11 @@ func (sr *SourceRepository) init(pgxPool *pgxpool.Pool) {
 	sr.pgxPool = pgxPool
 }
 
-func (sr *SourceRepository) GetSourcesByMediaId(mediaId int64) ([]Source, error) {
-	return selectFromTableWhere[Source](context.Background(), sr.pgxPool, "sources",
+func (sr *SourceRepository) GetSourcesByMediaId(ctx context.Context, mediaId int64) ([]Source, error) {
+	return selectFromTableWhere[Source](ctx, sr.pgxPool, "sources",
 		map[string]any{"media_id": mediaId}, nil, nil, nil)
 }
 
-func (sr *SourceRepository) InsertSourceTx(tx pgx.Tx, args *SourceArguments) (Source, error) {
-	return insertIntoTable[Source](context.Background(), tx, "sources", args.GetNamedArgs())
+func (sr *SourceRepository) InsertSourceTx(ctx context.Context, tx pgx.Tx, args *SourceArguments) (Source, error) {
+	return insertIntoTable[Source](ctx, tx, "sources", args.GetNamedArgs())
 }

@@ -22,5 +22,5 @@ func (wh *WorkHandler) HandleRequest(rw http.ResponseWriter, r *http.Request) {
 
 func (wh *WorkHandler) handleGet(rw http.ResponseWriter, r *http.Request) {
 	id := mustNumberingStringToId(r.PathValue("numbering"))
-	wh.workService.GetTemplateData(id).ExecuteTemplate(rw)
+	wh.workService.GetTemplateData(r.Context(), id).ExecuteTemplate(rw)
 }

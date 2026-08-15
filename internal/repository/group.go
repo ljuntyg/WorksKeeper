@@ -36,25 +36,26 @@ func (gr *GroupRepository) init(pgxPool *pgxpool.Pool) {
 	gr.pgxPool = pgxPool
 }
 
-func (gr *GroupRepository) GetGroup(id int64) (Group, error) {
-	return selectExactlyOneFromTableWhere[Group](context.Background(), gr.pgxPool, "groups",
+func (gr *GroupRepository) GetOneGroupById(ctx context.Context, id int64) (Group, error) {
+	return selectExactlyOneFromTableWhere[Group](ctx, gr.pgxPool, "groups",
 		map[string]any{"id": id}, nil, nil)
 }
 
-func (gr *GroupRepository) InsertGroupTx(tx pgx.Tx, args *GroupArguments) (Group, error) {
-	return insertIntoTable[Group](context.Background(), tx, "groups", args.GetNamedArgs())
+func (gr *GroupRepository) InsertGroupTx(ctx context.Context, tx pgx.Tx, args *GroupArguments) (Group, error) {
+	return insertIntoTable[Group](ctx, tx, "groups", args.GetNamedArgs())
 }
 
-func (gr *GroupRepository) InsertGroup(args *GroupArguments) (Group, error) {
-	return insertIntoTable[Group](context.Background(), gr.pgxPool, "groups", args.GetNamedArgs())
+func (gr *GroupRepository) InsertGroup(ctx context.Context, args *GroupArguments) (Group, error) {
+	return insertIntoTable[Group](ctx, gr.pgxPool, "groups", args.GetNamedArgs())
 }
 
-func (gr *GroupRepository) GetGroupByContentId(contentId int64) (Group, error) {
-	return selectExactlyOneFromTableWhere[Group](context.Background(), gr.pgxPool, "groups",
+func (gr *GroupRepository) GetOneGroupByContentId(ctx context.Context, contentId int64) (Group, error) {
+	return selectExactlyOneFromTableWhere[Group](ctx, gr.pgxPool, "groups",
 		map[string]any{"content_id": contentId}, nil, nil)
 }
 
-func (gr *GroupRepository) GetRootGroupByCanvasId(canvasId int64) (Group, error) {
-	return selectExactlyOneFromTableWhere[Group](context.Background(), gr.pgxPool, "groups",
+// Only root Groups carry a canvas_id, so this returns the Canvas's root Group.
+func (gr *GroupRepository) GetOneGroupByCanvasId(ctx context.Context, canvasId int64) (Group, error) {
+	return selectExactlyOneFromTableWhere[Group](ctx, gr.pgxPool, "groups",
 		map[string]any{"canvas_id": canvasId}, nil, nil)
 }

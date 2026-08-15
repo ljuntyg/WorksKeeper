@@ -207,7 +207,6 @@ func buildWhereQuery(tableName string, equals map[string]any, null *nullFilter, 
 	return query, args, nil
 }
 
-// TODO: what context should callers pass?
 // selectFromTableWhere fetches zero or more rows matching the given conditions.
 func selectFromTableWhere[T any](ctx context.Context, db pgxExecutor, tableName string, equals map[string]any, null *nullFilter, order *orderBy, limit *int64) ([]T, error) {
 	query, args, err := buildWhereQuery(tableName, equals, null, order, limit)
@@ -225,7 +224,6 @@ func selectFromTableWhere[T any](ctx context.Context, db pgxExecutor, tableName 
 	return pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
 }
 
-// TODO: what context should callers pass?
 // selectOneFromTableWhere fetches exactly one row matching the given conditions.
 func selectExactlyOneFromTableWhere[T any](ctx context.Context, db pgxExecutor, tableName string, equals map[string]any, null *nullFilter, order *orderBy) (T, error) {
 	var zero T
@@ -245,7 +243,6 @@ func selectExactlyOneFromTableWhere[T any](ctx context.Context, db pgxExecutor, 
 	return pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[T])
 }
 
-// TODO: what context should callers pass?
 func selectOptionalOneFromTableWhere[T any](ctx context.Context, db pgxExecutor, tableName string, equals map[string]any, null *nullFilter, order *orderBy) (*T, error) {
 	one := int64(1)
 	query, args, err := buildWhereQuery(tableName, equals, null, order, &one)
@@ -273,7 +270,6 @@ func selectOptionalOneFromTableWhere[T any](ctx context.Context, db pgxExecutor,
 	return &result, nil
 }
 
-// TODO: what context should callers pass?
 func insertIntoTable[T any](ctx context.Context, db pgxExecutor, tableName string, args pgx.NamedArgs) (T, error) {
 	var zero T
 	if len(args) == 0 {
@@ -303,7 +299,6 @@ func insertIntoTable[T any](ctx context.Context, db pgxExecutor, tableName strin
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[T])
 }
 
-// TODO: what context should callers pass?
 func selectAllFromTableLimitN[T any](ctx context.Context, db pgxExecutor, tableName string, n int64) ([]T, error) {
 	query := fmt.Sprintf(`SELECT * FROM %s LIMIT @n`, pgx.Identifier{tableName}.Sanitize())
 	args := pgx.NamedArgs{
@@ -320,7 +315,6 @@ func selectAllFromTableLimitN[T any](ctx context.Context, db pgxExecutor, tableN
 	return pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
 }
 
-// TODO: what context should callers pass?
 // updateTableWhere updates all rows matching the given conditions and returns the updated rows.
 func updateTableWhere[T any](ctx context.Context, db pgxExecutor, tableName string, set map[string]any, equals map[string]any, null *nullFilter) ([]T, error) {
 	if len(set) == 0 {
@@ -375,7 +369,6 @@ func updateTableWhere[T any](ctx context.Context, db pgxExecutor, tableName stri
 	return pgx.CollectRows(rows, pgx.RowToStructByNameLax[T])
 }
 
-// TODO: what context should callers pass?
 // updateExactlyOneTableWhere updates exactly one row and returns it, erroring if zero or more than one row matched.
 func updateExactlyOneTableWhere[T any](ctx context.Context, db pgxExecutor, tableName string, set map[string]any, equals map[string]any, null *nullFilter) (T, error) {
 	var zero T
@@ -391,7 +384,6 @@ func updateExactlyOneTableWhere[T any](ctx context.Context, db pgxExecutor, tabl
 	return rows[0], nil
 }
 
-// TODO: what context should callers pass?
 // deleteFromTableWhere deletes all rows matching the given conditions.
 func deleteFromTableWhere(ctx context.Context, db pgxExecutor, tableName string, equals map[string]any, null *nullFilter) error {
 	if len(equals) == 0 && null == nil {
@@ -431,7 +423,6 @@ func deleteFromTableWhere(ctx context.Context, db pgxExecutor, tableName string,
 	return nil
 }
 
-// TODO: what context should callers pass?
 // insertIntoTableAppendPosition inserts a row into tableName, computing
 // positionColumn as (max existing position within the group + 1), or 1 if
 // the group is currently empty. groupColumn/groupValue scope what counts as

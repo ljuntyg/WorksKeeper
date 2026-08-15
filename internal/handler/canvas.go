@@ -38,7 +38,7 @@ func (ch *CanvasHandler) HandleRequestNew(rw http.ResponseWriter, r *http.Reques
 
 func (ch *CanvasHandler) handleGet(rw http.ResponseWriter, r *http.Request, editing bool) {
 	workId := mustNumberingStringToId(r.PathValue("numbering"))
-	ch.canvasService.GetTemplateData(workId, editing).ExecuteTemplate(rw)
+	ch.canvasService.GetTemplateData(r.Context(), workId, editing).ExecuteTemplate(rw)
 }
 
 func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
@@ -143,14 +143,14 @@ func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (ch *CanvasHandler) handleGetNew(rw http.ResponseWriter, r *http.Request) {
-	work := ch.canvasService.MustInsertNewWorkInBaseCollection()
+	work := ch.canvasService.MustInsertNewWorkInBaseCollection(r.Context())
 	http.Redirect(rw, r, "/compose"+work.GetNumberingUrlString(), http.StatusFound)
 }
 
 func (ch *CanvasHandler) saveEdits(r *http.Request) {
 	workId := mustNumberingStringToId(r.PathValue("numbering"))
 
-	ch.canvasService.MustSaveCanvasEdits(workId, &service.CanvasEdits{
+	ch.canvasService.MustSaveCanvasEdits(r.Context(), workId, &service.CanvasEdits{
 		Title:           extractOptionalFieldFromRequest(r, "title-text"),
 		TextContents:    extractIndexedFieldsFromRequest(r, "text"),
 		CaptionContents: extractIndexedFieldsFromRequest(r, "caption"),
@@ -158,46 +158,46 @@ func (ch *CanvasHandler) saveEdits(r *http.Request) {
 }
 
 func (ch *CanvasHandler) handleAddText(rw http.ResponseWriter, r *http.Request, groupId int64) {
-	ch.canvasService.MustInsertNewTextInGroup(groupId)
+	ch.canvasService.MustInsertNewTextInGroup(r.Context(), groupId)
 	ch.handleGet(rw, r, true)
 }
 
 func (ch *CanvasHandler) handleAddMedia(rw http.ResponseWriter, r *http.Request, groupId int64) {
-	ch.canvasService.MustInsertNewMediaInGroup(groupId)
+	ch.canvasService.MustInsertNewMediaInGroup(r.Context(), groupId)
 	ch.handleGet(rw, r, true)
 }
 
 func (ch *CanvasHandler) handleAddGroup(rw http.ResponseWriter, r *http.Request, groupId int64) {
-	ch.canvasService.MustInsertNewGroupInGroup(groupId)
+	ch.canvasService.MustInsertNewGroupInGroup(r.Context(), groupId)
 	ch.handleGet(rw, r, true)
 }
 
 func (ch *CanvasHandler) handleAddCaption(rw http.ResponseWriter, r *http.Request, mediaId int64) {
-	ch.canvasService.MustInsertNewCaptionInMedia(mediaId)
+	ch.canvasService.MustInsertNewCaptionInMedia(r.Context(), mediaId)
 	ch.handleGet(rw, r, true)
 }
 
 func (ch *CanvasHandler) handleContentIncreasePosition(rw http.ResponseWriter, r *http.Request, contentId int64) {
-	ch.canvasService.MustIncreaseContentPosition(contentId)
+	ch.canvasService.MustIncreaseContentPosition(r.Context(), contentId)
 	ch.handleGet(rw, r, true)
 }
 
 func (ch *CanvasHandler) handleContentDecreasePosition(rw http.ResponseWriter, r *http.Request, contentId int64) {
-	ch.canvasService.MustDecreaseContentPosition(contentId)
+	ch.canvasService.MustDecreaseContentPosition(r.Context(), contentId)
 	ch.handleGet(rw, r, true)
 }
 
 func (ch *CanvasHandler) handleDeleteContent(rw http.ResponseWriter, r *http.Request, contentId int64) {
-	ch.canvasService.MustDeleteContent(contentId)
+	ch.canvasService.MustDeleteContent(r.Context(), contentId)
 	ch.handleGet(rw, r, true)
 }
 
 func (ch *CanvasHandler) handleDeleteCaption(rw http.ResponseWriter, r *http.Request, captionId int64) {
-	ch.canvasService.MustDeleteCaption(captionId)
+	ch.canvasService.MustDeleteCaption(r.Context(), captionId)
 	ch.handleGet(rw, r, true)
 }
 
 func (ch *CanvasHandler) handleUpload(rw http.ResponseWriter, r *http.Request, mediaId int64) {
-	ch.canvasService.MustUploadMedia(mediaId, r)
+	ch.canvasService.MustUploadMedia(r.Context(), mediaId, r)
 	ch.handleGet(rw, r, true)
 }

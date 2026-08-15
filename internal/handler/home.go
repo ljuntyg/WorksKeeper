@@ -32,5 +32,5 @@ func (h *HomeHandler) handleGet(rw http.ResponseWriter, r *http.Request) {
 		Listings: listings,
 		HasMore:  hasMore,
 	}) */
-	h.homeService.GetTemplateData().ExecuteTemplate(rw)
+	h.homeService.GetTemplateData(r.Context()).ExecuteTemplate(rw)
 }

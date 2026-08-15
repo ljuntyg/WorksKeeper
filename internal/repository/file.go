@@ -36,18 +36,18 @@ func (fr *FileRepository) init(pgxPool *pgxpool.Pool) {
 	fr.pgxPool = pgxPool
 }
 
-func (fr *FileRepository) GetFile(id int64) (File, error) {
-	return selectExactlyOneFromTableWhere[File](context.Background(), fr.pgxPool, "files",
+func (fr *FileRepository) GetOneFileById(ctx context.Context, id int64) (File, error) {
+	return selectExactlyOneFromTableWhere[File](ctx, fr.pgxPool, "files",
 		map[string]any{"id": id}, nil, nil)
 }
 
 // GetOptionalFileByHashAndSizeTx looks a File up by its contents, so that an
 // upload of bytes we already store reuses the File instead of adding a copy.
-func (fr *FileRepository) GetOptionalFileByHashAndSizeTx(tx pgx.Tx, hash string, size int64) (*File, error) {
-	return selectOptionalOneFromTableWhere[File](context.Background(), tx, "files",
+func (fr *FileRepository) GetOptionalFileByHashAndSizeTx(ctx context.Context, tx pgx.Tx, hash string, size int64) (*File, error) {
+	return selectOptionalOneFromTableWhere[File](ctx, tx, "files",
 		map[string]any{"hash": hash, "size": size}, nil, nil)
 }
 
-func (fr *FileRepository) InsertFileTx(tx pgx.Tx, args *FileArguments) (File, error) {
-	return insertIntoTable[File](context.Background(), tx, "files", args.GetNamedArgs())
+func (fr *FileRepository) InsertFileTx(ctx context.Context, tx pgx.Tx, args *FileArguments) (File, error) {
+	return insertIntoTable[File](ctx, tx, "files", args.GetNamedArgs())
 }

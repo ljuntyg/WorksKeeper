@@ -22,5 +22,5 @@ func (sh *SeriesHandler) HandleRequest(rw http.ResponseWriter, r *http.Request) 
 
 func (sh *SeriesHandler) handleGet(rw http.ResponseWriter, r *http.Request) {
 	id := mustNumberingStringToId(r.PathValue("numbering"))
-	sh.seriesService.GetTemplateData(id).ExecuteTemplate(rw)
+	sh.seriesService.GetTemplateData(r.Context(), id).ExecuteTemplate(rw)
 }

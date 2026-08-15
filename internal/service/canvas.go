@@ -26,9 +26,9 @@ func (cs *CanvasService) Init(repos *repository.RepositoryCollection) {
 	cs.repos = repos
 }
 
-func (cs *CanvasService) GetTemplateData(workId int64, editing bool) template.Executable {
-	templateWork := mustBuildTemplateWorkShallow(workId, cs.repos)
-	mustFillTemplateWork(templateWork, cs.repos)
+func (cs *CanvasService) GetTemplateData(ctx context.Context, workId int64, editing bool) template.Executable {
+	templateWork := mustBuildTemplateWorkShallow(ctx, workId, cs.repos)
+	mustFillTemplateWork(ctx, templateWork, cs.repos)
 
 	return &template.CanvasData{
 		TemplateWork: templateWork,
@@ -36,30 +36,30 @@ func (cs *CanvasService) GetTemplateData(workId int64, editing bool) template.Ex
 	}
 }
 
-func (cs *CanvasService) MustInsertNewWorkInBaseCollection() *frontend.TemplateWork {
-	collection, err := cs.repos.CollectionRepo.GetCollection(1)
+func (cs *CanvasService) MustInsertNewWorkInBaseCollection(ctx context.Context) *frontend.TemplateWork {
+	collection, err := cs.repos.CollectionRepo.GetOneCollectionById(ctx, 1)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Collection")
 	}
 
-	return cs.mustInsertNewWork(collection.RootSeriesId)
+	return cs.mustInsertNewWork(ctx, collection.RootSeriesId)
 }
 
-func (cs *CanvasService) MustInsertNewTextInGroup(groupId int64) *frontend.TemplateText {
-	tx := cs.repos.MustBegin(context.Background())
+func (cs *CanvasService) MustInsertNewTextInGroup(ctx context.Context, groupId int64) *frontend.TemplateText {
+	tx := cs.repos.MustBegin(ctx)
 
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error inserting new Text; rolled back")
 		}
 	}()
 
-	templateContent := mustInsertNewTemplateTextContent(tx, groupId, cs.repos)
+	templateContent := mustInsertNewTemplateTextContent(ctx, tx, groupId, cs.repos)
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error committing new Text")
 	}
@@ -67,20 +67,20 @@ func (cs *CanvasService) MustInsertNewTextInGroup(groupId int64) *frontend.Templ
 	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateText)
 }
 
-func (cs *CanvasService) MustInsertNewMediaInGroup(groupId int64) *frontend.TemplateMedia {
-	tx := cs.repos.MustBegin(context.Background())
+func (cs *CanvasService) MustInsertNewMediaInGroup(ctx context.Context, groupId int64) *frontend.TemplateMedia {
+	tx := cs.repos.MustBegin(ctx)
 
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error inserting new Media; rolled back")
 		}
 	}()
 
-	templateContent := mustInsertNewTemplateMediaContent(tx, groupId, cs.repos)
+	templateContent := mustInsertNewTemplateMediaContent(ctx, tx, groupId, cs.repos)
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error committing new Media")
 	}
@@ -88,20 +88,20 @@ func (cs *CanvasService) MustInsertNewMediaInGroup(groupId int64) *frontend.Temp
 	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateMedia)
 }
 
-func (cs *CanvasService) MustInsertNewGroupInGroup(groupId int64) *frontend.TemplateGroup {
-	tx := cs.repos.MustBegin(context.Background())
+func (cs *CanvasService) MustInsertNewGroupInGroup(ctx context.Context, groupId int64) *frontend.TemplateGroup {
+	tx := cs.repos.MustBegin(ctx)
 
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error inserting new Group; rolled back")
 		}
 	}()
 
-	templateContent := mustInsertNewTemplateGroupContent(tx, groupId, cs.repos)
+	templateContent := mustInsertNewTemplateGroupContent(ctx, tx, groupId, cs.repos)
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error committing new Group")
 	}
@@ -109,20 +109,20 @@ func (cs *CanvasService) MustInsertNewGroupInGroup(groupId int64) *frontend.Temp
 	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateGroup)
 }
 
-func (cs *CanvasService) MustInsertNewCaptionInMedia(mediaId int64) *frontend.TemplateCaption {
-	tx := cs.repos.MustBegin(context.Background())
+func (cs *CanvasService) MustInsertNewCaptionInMedia(ctx context.Context, mediaId int64) *frontend.TemplateCaption {
+	tx := cs.repos.MustBegin(ctx)
 
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error inserting new Caption; rolled back")
 		}
 	}()
 
-	templateCaption := mustInsertNewTemplateCaption(tx, mediaId, cs.repos)
+	templateCaption := mustInsertNewTemplateCaption(ctx, tx, mediaId, cs.repos)
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error committing new Caption")
 	}
@@ -130,85 +130,85 @@ func (cs *CanvasService) MustInsertNewCaptionInMedia(mediaId int64) *frontend.Te
 	return templateCaption
 }
 
-func (cs *CanvasService) MustIncreaseContentPosition(contentId int64) {
-	tx := cs.repos.MustBegin(context.Background())
+func (cs *CanvasService) MustIncreaseContentPosition(ctx context.Context, contentId int64) {
+	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error increasing Content position; rolled back")
 		}
 	}()
 
-	if _, err := cs.repos.ContentRepo.IncreaseContentPositionTx(tx, contentId); err != nil {
+	if _, err := cs.repos.ContentRepo.IncreaseContentPositionTx(ctx, tx, contentId); err != nil {
 		log.Println(err)
 		panic("unexpected error increasing Content position")
 	}
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error increasing Content position")
 	}
 }
 
-func (cs *CanvasService) MustDecreaseContentPosition(contentId int64) {
-	tx := cs.repos.MustBegin(context.Background())
+func (cs *CanvasService) MustDecreaseContentPosition(ctx context.Context, contentId int64) {
+	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error decreasing Content position; rolled back")
 		}
 	}()
 
-	if _, err := cs.repos.ContentRepo.DecreaseContentPositionTx(tx, contentId); err != nil {
+	if _, err := cs.repos.ContentRepo.DecreaseContentPositionTx(ctx, tx, contentId); err != nil {
 		log.Println(err)
 		panic("unexpected error decreasing Content position")
 	}
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error decreasing Content position")
 	}
 }
 
-func (cs *CanvasService) MustDeleteContent(contentId int64) {
-	tx := cs.repos.MustBegin(context.Background())
+func (cs *CanvasService) MustDeleteContent(ctx context.Context, contentId int64) {
+	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error deleting Content; rolled back")
 		}
 	}()
 
-	if err := cs.repos.ContentRepo.DeleteContentTx(tx, contentId); err != nil {
+	if err := cs.repos.ContentRepo.DeleteContentByIdTx(ctx, tx, contentId); err != nil {
 		log.Println(err)
 		panic("unexpected error deleting Content")
 	}
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error deleting Content")
 	}
 }
 
-func (cs *CanvasService) MustDeleteCaption(captionId int64) {
-	tx := cs.repos.MustBegin(context.Background())
+func (cs *CanvasService) MustDeleteCaption(ctx context.Context, captionId int64) {
+	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error deleting Caption; rolled back")
 		}
 	}()
 
-	if err := cs.repos.CaptionRepo.DeleteCaptionTx(tx, captionId); err != nil {
+	if err := cs.repos.CaptionRepo.DeleteCaptionByIdTx(ctx, tx, captionId); err != nil {
 		log.Println(err)
 		panic("unexpected error deleting Caption")
 	}
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error deleting Caption")
 	}
@@ -220,49 +220,49 @@ type CanvasEdits struct {
 	CaptionContents map[int64]string
 }
 
-func (cs *CanvasService) MustSaveCanvasEdits(workId int64, edits *CanvasEdits) {
+func (cs *CanvasService) MustSaveCanvasEdits(ctx context.Context, workId int64, edits *CanvasEdits) {
 	if edits.Title == nil && len(edits.TextContents) == 0 && len(edits.CaptionContents) == 0 {
 		return
 	}
 
-	tx := cs.repos.MustBegin(context.Background())
+	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error saving Canvas edits; rolled back")
 		}
 	}()
 
 	if edits.Title != nil {
-		if _, err := cs.repos.WorkRepo.UpdateWorkTitleTx(tx, workId, *edits.Title); err != nil {
+		if _, err := cs.repos.WorkRepo.UpdateWorkSetTitleByIdTx(ctx, tx, workId, *edits.Title); err != nil {
 			log.Println(err)
 			panic("unexpected error saving Work title")
 		}
 	}
 
 	for textId, content := range edits.TextContents {
-		if _, err := cs.repos.TextRepo.UpdateTextContentTx(tx, textId, content); err != nil {
+		if _, err := cs.repos.TextRepo.UpdateTextSetContentByIdTx(ctx, tx, textId, content); err != nil {
 			log.Println(err)
 			panic("unexpected error saving Text content")
 		}
 	}
 
 	for captionId, content := range edits.CaptionContents {
-		if _, err := cs.repos.CaptionRepo.UpdateCaptionContentTx(tx, captionId, content); err != nil {
+		if _, err := cs.repos.CaptionRepo.UpdateCaptionSetContentByIdTx(ctx, tx, captionId, content); err != nil {
 			log.Println(err)
 			panic("unexpected error saving Caption content")
 		}
 	}
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error saving Canvas edits")
 	}
 }
 
-func (cs *CanvasService) MustUploadMedia(mediaId int64, r *http.Request) {
-	fileserver, err := cs.repos.FileserverRepo.GetFileserverOrderByIdAscending()
+func (cs *CanvasService) MustUploadMedia(ctx context.Context, mediaId int64, r *http.Request) {
+	fileserver, err := cs.repos.FileserverRepo.GetOneFileserverOrderByIdAscending(ctx)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Fileserver to upload to")
@@ -270,20 +270,20 @@ func (cs *CanvasService) MustUploadMedia(mediaId int64, r *http.Request) {
 
 	upload := mustStoreUploadedFile(r, &fileserver)
 
-	tx := cs.repos.MustBegin(context.Background())
+	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error uploading Media; rolled back")
 		}
 	}()
 
-	file := mustGetOrInsertFile(tx, upload, cs.repos)
-	mustGetOrInsertFilenode(tx, file.Id, fileserver.Id, upload.path, cs.repos)
-	filename := mustGetOrInsertFilename(tx, file.Id, upload.name, cs.repos)
+	file := mustGetOrInsertFile(ctx, tx, upload, cs.repos)
+	mustGetOrInsertFilenode(ctx, tx, file.Id, fileserver.Id, upload.path, cs.repos)
+	filename := mustGetOrInsertFilename(ctx, tx, file.Id, upload.name, cs.repos)
 
-	if _, err := cs.repos.SourceRepo.InsertSourceTx(tx, &repository.SourceArguments{
+	if _, err := cs.repos.SourceRepo.InsertSourceTx(ctx, tx, &repository.SourceArguments{
 		MediaId:    mediaId,
 		FilenameId: filename.Id,
 	}); err != nil {
@@ -291,26 +291,26 @@ func (cs *CanvasService) MustUploadMedia(mediaId int64, r *http.Request) {
 		panic("unexpected error inserting new Source")
 	}
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error uploading Media")
 	}
 }
 
-func (cs *CanvasService) mustInsertNewWork(seriesId int64) *frontend.TemplateWork {
-	tx := cs.repos.MustBegin(context.Background())
+func (cs *CanvasService) mustInsertNewWork(ctx context.Context, seriesId int64) *frontend.TemplateWork {
+	tx := cs.repos.MustBegin(ctx)
 
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback(context.Background())
+			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
 			panic("unexpected error inserting new Work; rolled back")
 		}
 	}()
 
-	templateListing := mustInsertNewTemplateWorkListing(tx, seriesId, cs.repos)
+	templateListing := mustInsertNewTemplateWorkListing(ctx, tx, seriesId, cs.repos)
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
 		panic("unexpected error committing new Work")
 	}
@@ -318,8 +318,8 @@ func (cs *CanvasService) mustInsertNewWork(seriesId int64) *frontend.TemplateWor
 	return templateListing.TemplateWorkOrSeries.(*frontend.TemplateWork)
 }
 
-func mustGetOrInsertFile(tx pgx.Tx, upload *uploadedFile, repos *repository.RepositoryCollection) repository.File {
-	file, err := repos.FileRepo.GetOptionalFileByHashAndSizeTx(tx, upload.hash, upload.size)
+func mustGetOrInsertFile(ctx context.Context, tx pgx.Tx, upload *uploadedFile, repos *repository.RepositoryCollection) repository.File {
+	file, err := repos.FileRepo.GetOptionalFileByHashAndSizeTx(ctx, tx, upload.hash, upload.size)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting File by contents")
@@ -329,7 +329,7 @@ func mustGetOrInsertFile(tx pgx.Tx, upload *uploadedFile, repos *repository.Repo
 		return *file
 	}
 
-	insertedFile, err := repos.FileRepo.InsertFileTx(tx, &repository.FileArguments{
+	insertedFile, err := repos.FileRepo.InsertFileTx(ctx, tx, &repository.FileArguments{
 		Size:     upload.size,
 		Hash:     upload.hash,
 		MimeType: upload.mimeType,
@@ -343,8 +343,8 @@ func mustGetOrInsertFile(tx pgx.Tx, upload *uploadedFile, repos *repository.Repo
 	return insertedFile
 }
 
-func mustGetOrInsertFilenode(tx pgx.Tx, fileId int64, fileserverId int64, path string, repos *repository.RepositoryCollection) repository.Filenode {
-	filenode, err := repos.FilenodeRepo.GetOptionalFilenodeByFileserverIdAndPathTx(tx, fileserverId, path)
+func mustGetOrInsertFilenode(ctx context.Context, tx pgx.Tx, fileId int64, fileserverId int64, path string, repos *repository.RepositoryCollection) repository.Filenode {
+	filenode, err := repos.FilenodeRepo.GetOptionalFilenodeByFileserverIdAndPathTx(ctx, tx, fileserverId, path)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Filenode by location")
@@ -354,7 +354,7 @@ func mustGetOrInsertFilenode(tx pgx.Tx, fileId int64, fileserverId int64, path s
 		return *filenode
 	}
 
-	insertedFilenode, err := repos.FilenodeRepo.InsertFilenodeTx(tx, &repository.FilenodeArguments{
+	insertedFilenode, err := repos.FilenodeRepo.InsertFilenodeTx(ctx, tx, &repository.FilenodeArguments{
 		FileId:       fileId,
 		FileserverId: fileserverId,
 		Path:         path,
@@ -368,8 +368,8 @@ func mustGetOrInsertFilenode(tx pgx.Tx, fileId int64, fileserverId int64, path s
 	return insertedFilenode
 }
 
-func mustGetOrInsertFilename(tx pgx.Tx, fileId int64, name string, repos *repository.RepositoryCollection) repository.Filename {
-	filename, err := repos.FilenameRepo.GetOptionalFilenameByFileIdAndNameTx(tx, fileId, name)
+func mustGetOrInsertFilename(ctx context.Context, tx pgx.Tx, fileId int64, name string, repos *repository.RepositoryCollection) repository.Filename {
+	filename, err := repos.FilenameRepo.GetOptionalFilenameByFileIdAndNameTx(ctx, tx, fileId, name)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Filename by name")
@@ -379,7 +379,7 @@ func mustGetOrInsertFilename(tx pgx.Tx, fileId int64, name string, repos *reposi
 		return *filename
 	}
 
-	insertedFilename, err := repos.FilenameRepo.InsertFilenameTx(tx, &repository.FilenameArguments{
+	insertedFilename, err := repos.FilenameRepo.InsertFilenameTx(ctx, tx, &repository.FilenameArguments{
 		FileId: fileId,
 		Name:   name,
 	})

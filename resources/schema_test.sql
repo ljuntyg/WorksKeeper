@@ -202,23 +202,32 @@ FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE;
 INSERT INTO fileservers (scheme, host, port, disk_path, url_path)
 VALUES ('http', 'localhost', 8080, './resources/media', '/media/'); -- fileserver.id 1
 
--- Placeholder digests; real ones are computed from the bytes on upload.
+-- Sizes and digests of the seeded files under the objects directory, which is
+-- what an upload of those same bytes would compute.
 INSERT INTO files (size, hash, mime_type)
-VALUES (1048576, '1111111111111111111111111111111111111111111111111111111111111111', 'video/mp4'); -- file.id 1
+VALUES (3215511, '2ccae0bc65d10ced9dd9d2404a9f39fd4505180f447b44461bb7ebcb363f4aa1', 'video/mp4'); -- file.id 1
 
 INSERT INTO files (size, hash, mime_type)
-VALUES (65536, '2222222222222222222222222222222222222222222222222222222222222222', 'image/png'); -- file.id 2
+VALUES (35911, 'ef7b88411629d1983f2c5b4b78351e6f708f2b2105de30d37ebc917568d504d4', 'image/png'); -- file.id 2
 
 INSERT INTO files (size, hash, mime_type)
-VALUES (262144, '3333333333333333333333333333333333333333333333333333333333333333', 'audio/ogg'); -- file.id 3
+VALUES (3015647, '494664c7bde01ba414e801db4538063991e57cf046e63c51511ae6f86b1a01fc', 'audio/ogg'); -- file.id 3
 
 INSERT INTO filenames (file_id, name) VALUES (1, 'introsong.mp4'); -- filename.id 1
 INSERT INTO filenames (file_id, name) VALUES (2, 'plots.png');     -- filename.id 2
 INSERT INTO filenames (file_id, name) VALUES (3, 'test.ogg');      -- filename.id 3
 
-INSERT INTO filenodes (file_id, fileserver_id, path) VALUES (1, 1, 'videos/introsong.mp4'); -- filenode.id 1
-INSERT INTO filenodes (file_id, fileserver_id, path) VALUES (2, 1, 'images/plots.png');     -- filenode.id 2
-INSERT INTO filenodes (file_id, fileserver_id, path) VALUES (3, 1, 'sounds/test.ogg');      -- filenode.id 3
+-- A path is relative to the objects directory of the Fileserver, and is the
+-- digest of the file sharded over two directories, under the extension its
+-- MIME type is stored as.
+INSERT INTO filenodes (file_id, fileserver_id, path)
+VALUES (1, 1, '2c/ca/2ccae0bc65d10ced9dd9d2404a9f39fd4505180f447b44461bb7ebcb363f4aa1.mp4'); -- filenode.id 1
+
+INSERT INTO filenodes (file_id, fileserver_id, path)
+VALUES (2, 1, 'ef/7b/ef7b88411629d1983f2c5b4b78351e6f708f2b2105de30d37ebc917568d504d4.png'); -- filenode.id 2
+
+INSERT INTO filenodes (file_id, fileserver_id, path)
+VALUES (3, 1, '49/46/494664c7bde01ba414e801db4538063991e57cf046e63c51511ae6f86b1a01fc.oga'); -- filenode.id 3
 
 -- Root series for the only collection
 INSERT INTO series (title, created_at) VALUES ('Series #1 (root)', NOW());          -- series.id 1, listing_id NULL

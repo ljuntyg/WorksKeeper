@@ -33,19 +33,19 @@ func (fr *FilenameRepository) init(pgxPool *pgxpool.Pool) {
 	fr.pgxPool = pgxPool
 }
 
-func (fr *FilenameRepository) GetFilename(id int64) (Filename, error) {
-	return selectExactlyOneFromTableWhere[Filename](context.Background(), fr.pgxPool, "filenames",
+func (fr *FilenameRepository) GetOneFilenameById(ctx context.Context, id int64) (Filename, error) {
+	return selectExactlyOneFromTableWhere[Filename](ctx, fr.pgxPool, "filenames",
 		map[string]any{"id": id}, nil, nil)
 }
 
 // GetOptionalFilenameByFileIdAndNameTx looks a Filename up by the name it
 // belongs to a File under, so that uploading the same file under a name it
 // already has reuses the Filename instead of failing its unique constraint.
-func (fr *FilenameRepository) GetOptionalFilenameByFileIdAndNameTx(tx pgx.Tx, fileId int64, name string) (*Filename, error) {
-	return selectOptionalOneFromTableWhere[Filename](context.Background(), tx, "filenames",
+func (fr *FilenameRepository) GetOptionalFilenameByFileIdAndNameTx(ctx context.Context, tx pgx.Tx, fileId int64, name string) (*Filename, error) {
+	return selectOptionalOneFromTableWhere[Filename](ctx, tx, "filenames",
 		map[string]any{"file_id": fileId, "name": name}, nil, nil)
 }
 
-func (fr *FilenameRepository) InsertFilenameTx(tx pgx.Tx, args *FilenameArguments) (Filename, error) {
-	return insertIntoTable[Filename](context.Background(), tx, "filenames", args.GetNamedArgs())
+func (fr *FilenameRepository) InsertFilenameTx(ctx context.Context, tx pgx.Tx, args *FilenameArguments) (Filename, error) {
+	return insertIntoTable[Filename](ctx, tx, "filenames", args.GetNamedArgs())
 }

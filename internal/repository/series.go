@@ -35,24 +35,24 @@ func (sr *SeriesRepository) init(pgxPool *pgxpool.Pool) {
 	sr.pgxPool = pgxPool
 }
 
-func (sr *SeriesRepository) GetSeries(id int64) (Series, error) {
-	return selectExactlyOneFromTableWhere[Series](context.Background(), sr.pgxPool, "series",
+func (sr *SeriesRepository) GetOneSeriesById(ctx context.Context, id int64) (Series, error) {
+	return selectExactlyOneFromTableWhere[Series](ctx, sr.pgxPool, "series",
 		map[string]any{"id": id}, nil, nil)
 }
 
-func (sr *SeriesRepository) InsertSeries(args *SeriesArguments) (Series, error) {
-	return insertIntoTable[Series](context.Background(), sr.pgxPool, "series", args.GetNamedArgs())
+func (sr *SeriesRepository) InsertSeries(ctx context.Context, args *SeriesArguments) (Series, error) {
+	return insertIntoTable[Series](ctx, sr.pgxPool, "series", args.GetNamedArgs())
 }
 
-func (sr *SeriesRepository) InsertSeriesTx(tx pgx.Tx, args *SeriesArguments) (Series, error) {
-	return insertIntoTable[Series](context.Background(), tx, "series", args.GetNamedArgs())
+func (sr *SeriesRepository) InsertSeriesTx(ctx context.Context, tx pgx.Tx, args *SeriesArguments) (Series, error) {
+	return insertIntoTable[Series](ctx, tx, "series", args.GetNamedArgs())
 }
 
-func (sr *SeriesRepository) GetNSeries(n int) ([]Series, error) {
-	return selectAllFromTableLimitN[Series](context.Background(), sr.pgxPool, "series", int64(n))
+func (sr *SeriesRepository) GetSeriesLimitN(ctx context.Context, n int) ([]Series, error) {
+	return selectAllFromTableLimitN[Series](ctx, sr.pgxPool, "series", int64(n))
 }
 
-func (sr *SeriesRepository) GetSeriesByListingId(listingId int64) (Series, error) {
-	return selectExactlyOneFromTableWhere[Series](context.Background(), sr.pgxPool, "series",
+func (sr *SeriesRepository) GetOneSeriesByListingId(ctx context.Context, listingId int64) (Series, error) {
+	return selectExactlyOneFromTableWhere[Series](ctx, sr.pgxPool, "series",
 		map[string]any{"listing_id": listingId}, nil, nil)
 }
