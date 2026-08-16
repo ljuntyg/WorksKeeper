@@ -9,18 +9,18 @@ import (
 )
 
 type Collection struct {
-	Id           int64     `db:"id"`
-	RootSeriesId int64     `db:"root_series_id"`
-	CreatedAt    time.Time `db:"created_at"`
+	Id         int64     `db:"id"`
+	InstanceId int64     `db:"instance_id"`
+	CreatedAt  time.Time `db:"created_at"`
 }
 
 type CollectionArguments struct {
-	RootSeriesId int64
+	InstanceId int64
 }
 
 func (ca *CollectionArguments) GetNamedArgs() pgx.NamedArgs {
 	return pgx.NamedArgs{
-		"root_series_id": ca.RootSeriesId,
+		"instance_id": ca.InstanceId,
 	}
 }
 
@@ -39,4 +39,9 @@ func (cr *CollectionRepository) GetOneCollectionById(ctx context.Context, id int
 
 func (cr *CollectionRepository) InsertCollectionTx(ctx context.Context, tx pgx.Tx, args *CollectionArguments) (Collection, error) {
 	return insertIntoTable[Collection](ctx, tx, "collections", args.GetNamedArgs())
+}
+
+func (cr *CollectionRepository) GetOneCollectionByInstanceId(ctx context.Context, instanceId int64) (Collection, error) {
+	return selectExactlyOneFromTableWhere[Collection](ctx, cr.pgxPool, "collections",
+		map[string]any{"instance_id": instanceId}, nil, nil)
 }

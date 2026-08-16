@@ -6,8 +6,8 @@ import (
 )
 
 type HomeData struct {
-	TemplateCollection frontend.Templatable
-	HasMore            bool
+	TemplateInstance frontend.Templatable
+	HasMore          bool
 }
 
 func (hd *HomeData) ExecuteTemplate(rw http.ResponseWriter) {

@@ -12,7 +12,7 @@
         <a href="/compose/work">create</a>
       </nav>
 
-      {{ $.TemplateCollection.ToHtml }}
+      {{ $.TemplateInstance.ToHtml }}
 
       <section>
         {{ if and (lt (len .Listings) 15) (eq .HasMore true) }}

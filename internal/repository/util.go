@@ -23,6 +23,7 @@ type RepositoryCollection struct {
 	FilenodeRepo   *FilenodeRepository
 	FileserverRepo *FileserverRepository
 	GroupRepo      *GroupRepository
+	InstanceRepo   *InstanceRepository
 	ListingRepo    *ListingRepository
 	MediaRepo      *MediaRepository
 	SeriesRepo     *SeriesRepository
@@ -42,6 +43,7 @@ func (rc *RepositoryCollection) Init(
 	filenodeRepo *FilenodeRepository,
 	fileserverRepo *FileserverRepository,
 	groupRepo *GroupRepository,
+	instanceRepo *InstanceRepository,
 	listingRepo *ListingRepository,
 	mediaRepo *MediaRepository,
 	seriesRepo *SeriesRepository,
@@ -77,6 +79,9 @@ func (rc *RepositoryCollection) Init(
 
 	rc.GroupRepo = groupRepo
 	groupRepo.init(pgxPool)
+
+	rc.InstanceRepo = instanceRepo
+	instanceRepo.init(pgxPool)
 
 	rc.ListingRepo = listingRepo
 	listingRepo.init(pgxPool)

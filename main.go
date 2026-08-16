@@ -4,26 +4,15 @@ import (
 	"WorksKeeper/internal/handler"
 	"WorksKeeper/internal/repository"
 	"WorksKeeper/internal/service"
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 func main() {
 	mux := http.NewServeMux()
-
-	// TODO: using mux to handle means .jpg, . will get replaced with / from subdomainPeriodReplacer
-	/* for _, mt := range AllMediaTypes {
-		mediaDir := "." + mt.mediaDir() // ./{resourcefolder}/{media}/{contentType (plural)}/
-		urlPrefix := mt.urlPrefix()     // /{contentType (singular)}/{with}/{name}/{fileName}/
-		log.Printf("mediaDir: %s, urlPrefix: %s", mediaDir, urlPrefix)
-
-		contentTypeFileServer := http.FileServer(http.Dir(mediaDir))
-		mux.Handle(urlPrefix, http.StripPrefix(urlPrefix, contentTypeFileServer))
-	} */
-
-	/* cssFileServer := http.FileServer(http.Dir("./resources/static/"))
-	mux.Handle("/static/", http.StripPrefix("/static/", cssFileServer)) */
 
 	// one file server per Fileserver row; disk_path is served under url_path,
 	// except that only the stored files under it are, never the staging directory
@@ -48,6 +37,7 @@ func main() {
 	filenodeRepo := &repository.FilenodeRepository{}
 	fileserverRepo := &repository.FileserverRepository{}
 	groupRepo := &repository.GroupRepository{}
+	instanceRepo := &repository.InstanceRepository{}
 	listingRepo := &repository.ListingRepository{}
 	mediaRepo := &repository.MediaRepository{}
 	sourceRepo := &repository.SourceRepository{}
@@ -67,6 +57,7 @@ func main() {
 		filenodeRepo,
 		fileserverRepo,
 		groupRepo,
+		instanceRepo,
 		listingRepo,
 		mediaRepo,
 		seriesRepo,
@@ -74,11 +65,24 @@ func main() {
 		textRepo,
 		workRepo)
 
+	instancePort, err := strconv.Atoi(os.Getenv("INSTANCE_PORT"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// The address the Instance is reached on, which is the one it redirects to.
+	instance := service.MustGetOrInsertInstance(context.Background(), &repository.InstanceArguments{
+		Scheme: os.Getenv("INSTANCE_SCHEME"),
+		Host:   os.Getenv("INSTANCE_HOST"),
+		Port:   int32(instancePort),
+		Title:  os.Getenv("INSTANCE_TITLE"),
+	}, repoCollection)
+
 	canvasService := &service.CanvasService{}
-	canvasService.Init(repoCollection)
+	canvasService.Init(repoCollection, &instance)
 
 	homeService := &service.HomeService{}
-	homeService.Init(repoCollection)
+	homeService.Init(repoCollection, &instance)
 
 	seriesService := &service.SeriesService{}
 	seriesService.Init(repoCollection)
@@ -123,5 +127,5 @@ func main() {
 	// defering close in GetPgxPool causes "closed pool" error
 	defer pgxPool.Close()
 
-	log.Fatal(http.ListenAndServe(":8080", handler.SubdomainPeriodReplacer(mux)))
+	log.Fatal(http.ListenAndServe(":8080", handler.SubdomainPeriodReplacer(instance.Scheme, instance.Authority(), mux)))
 }

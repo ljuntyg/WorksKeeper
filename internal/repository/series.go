@@ -9,21 +9,24 @@ import (
 )
 
 type Series struct {
-	Id        int64     `db:"id"`
-	ListingId *int64    `db:"listing_id"`
-	Title     string    `db:"title"`
-	CreatedAt time.Time `db:"created_at"`
+	Id           int64     `db:"id"`
+	CollectionId *int64    `db:"collection_id"`
+	ListingId    *int64    `db:"listing_id"`
+	Title        string    `db:"title"`
+	CreatedAt    time.Time `db:"created_at"`
 }
 
 type SeriesArguments struct {
-	ListingId *int64
-	Title     string
+	CollectionId *int64
+	ListingId    *int64
+	Title        string
 }
 
 func (sa *SeriesArguments) GetNamedArgs() pgx.NamedArgs {
 	return pgx.NamedArgs{
-		"listing_id": sa.ListingId,
-		"title":      sa.Title,
+		"collection_id": sa.CollectionId,
+		"listing_id":    sa.ListingId,
+		"title":         sa.Title,
 	}
 }
 
@@ -55,4 +58,10 @@ func (sr *SeriesRepository) GetSeriesLimitN(ctx context.Context, n int) ([]Serie
 func (sr *SeriesRepository) GetOneSeriesByListingId(ctx context.Context, listingId int64) (Series, error) {
 	return selectExactlyOneFromTableWhere[Series](ctx, sr.pgxPool, "series",
 		map[string]any{"listing_id": listingId}, nil, nil)
+}
+
+// Only root Series carry a collection_id, so this returns the Collection's root Series.
+func (sr *SeriesRepository) GetOneSeriesByCollectionId(ctx context.Context, collectionId int64) (Series, error) {
+	return selectExactlyOneFromTableWhere[Series](ctx, sr.pgxPool, "series",
+		map[string]any{"collection_id": collectionId}, nil, nil)
 }

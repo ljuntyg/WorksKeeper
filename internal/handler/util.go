@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"WorksKeeper/internal/mock"
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -21,7 +21,7 @@ import (
 // request made to works.at.localhost/work/2760 -> Nginx proxies to localhost:8080 with X-Prefix-Subdomain = "works.at" and X-Suffix-Subdomain = "work/2760"
 // -> Go subdomainPeriodReplacer redirects to work.2760.at.localhost -> Nginx proxies to localhost:8080 with X-Prefix-Subdomain = "work.2760.at"
 // -> Go subdomainPeriodReplacer handles and responds to request made to work.2760.at.localhost by replacing the request url with localhost/work/2760 internally
-func SubdomainPeriodReplacer(next http.Handler) http.Handler {
+func SubdomainPeriodReplacer(scheme, host string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		suffixSubdomain := r.Header.Get("X-Suffix-Subdomain")
 		prefixSubdomain := r.Header.Get("X-Prefix-Subdomain")
@@ -30,9 +30,13 @@ func SubdomainPeriodReplacer(next http.Handler) http.Handler {
 
 		if suffixSubdomain != "" {
 			subdomain := strings.ReplaceAll(suffixSubdomain, "/", ".")
-			target := getProtocol() + subdomain + ".at." + getHost()
-			log.Println("Redirecting to URL: " + target)
-			http.Redirect(w, r, target, http.StatusPermanentRedirect)
+			target := url.URL{
+				Scheme: scheme,
+				Host:   subdomain + ".at." + host,
+			}
+
+			log.Println("Redirecting to URL: " + target.String())
+			http.Redirect(w, r, target.String(), http.StatusPermanentRedirect)
 			return
 		} else if prefixSubdomain != "" {
 			r.URL.Path = "/" + strings.ReplaceAll(prefixSubdomain, ".", "/")[0:len(prefixSubdomain)-len(".at.")+1]
@@ -54,16 +58,6 @@ func WithoutContentSniffing(next http.Handler) http.Handler {
 		rw.Header().Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(rw, r)
 	})
-}
-
-// TODO:
-func getProtocol() string {
-	return mock.GetMockProtocol()
-}
-
-// TODO:
-func getHost() string {
-	return mock.GetMockHost()
 }
 
 func loadTemplate(filePath string) *template.Template {

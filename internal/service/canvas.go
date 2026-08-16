@@ -19,11 +19,13 @@ import (
 )
 
 type CanvasService struct {
-	repos *repository.RepositoryCollection
+	repos    *repository.RepositoryCollection
+	instance *repository.Instance
 }
 
-func (cs *CanvasService) Init(repos *repository.RepositoryCollection) {
+func (cs *CanvasService) Init(repos *repository.RepositoryCollection, instance *repository.Instance) {
 	cs.repos = repos
+	cs.instance = instance
 }
 
 func (cs *CanvasService) GetTemplateData(ctx context.Context, workId int64, editing bool) template.Executable {
@@ -37,13 +39,19 @@ func (cs *CanvasService) GetTemplateData(ctx context.Context, workId int64, edit
 }
 
 func (cs *CanvasService) MustInsertNewWorkInBaseCollection(ctx context.Context) *frontend.TemplateWork {
-	collection, err := cs.repos.CollectionRepo.GetOneCollectionById(ctx, 1)
+	collection, err := cs.repos.CollectionRepo.GetOneCollectionByInstanceId(ctx, cs.instance.Id)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Collection")
 	}
 
-	return cs.mustInsertNewWork(ctx, collection.RootSeriesId)
+	rootSeries, err := cs.repos.SeriesRepo.GetOneSeriesByCollectionId(ctx, collection.Id)
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error getting Series")
+	}
+
+	return cs.mustInsertNewWork(ctx, rootSeries.Id)
 }
 
 func (cs *CanvasService) MustInsertNewTextInGroup(ctx context.Context, groupId int64) *frontend.TemplateText {

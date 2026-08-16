@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS instances CASCADE;
 DROP TABLE IF EXISTS collections CASCADE;
 DROP TABLE IF EXISTS works CASCADE;
 DROP TABLE IF EXISTS series CASCADE;
@@ -20,9 +21,21 @@ DROP TYPE IF EXISTS c_type CASCADE;
 CREATE TYPE l_type AS ENUM ('series', 'work');
 CREATE TYPE c_type AS ENUM ('group', 'text', 'media');
 
+-- The deployment this database serves. Owns a Collection the way a Work owns a
+-- Canvas, so that everything below it hangs off a single deletable row.
+CREATE TABLE instances (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    scheme VARCHAR(8) NOT NULL,
+    host VARCHAR(4096) NOT NULL,
+    port INTEGER NOT NULL,
+    title VARCHAR(4096) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    UNIQUE (host, port)
+);
+
 CREATE TABLE collections (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    root_series_id BIGINT UNIQUE NOT NULL,
+    instance_id BIGINT UNIQUE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
@@ -35,9 +48,11 @@ CREATE TABLE works (
 
 CREATE TABLE series (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    collection_id BIGINT UNIQUE,
     listing_id BIGINT UNIQUE,
     title VARCHAR(4096) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    CHECK ((collection_id IS NULL) <> (listing_id IS NULL))
 );
 
 CREATE TABLE listings (
@@ -133,8 +148,12 @@ CREATE INDEX filenodes_fileserver_id_idx ON filenodes (fileserver_id);
 CREATE INDEX filenames_file_id_idx ON filenames (file_id);
 
 ALTER TABLE collections
-ADD CONSTRAINT collections_root_series_fk
-FOREIGN KEY (root_series_id) REFERENCES series(id) ON DELETE RESTRICT;
+ADD CONSTRAINT collections_instance_fk
+FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE;
+
+ALTER TABLE series
+ADD CONSTRAINT series_collection_fk
+FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE;
 
 ALTER TABLE listings
 ADD CONSTRAINT listings_parent_series_fk
@@ -229,24 +248,31 @@ VALUES (2, 1, 'ef/7b/ef7b88411629d1983f2c5b4b78351e6f708f2b2105de30d37ebc917568d
 INSERT INTO filenodes (file_id, fileserver_id, path)
 VALUES (3, 1, '49/46/494664c7bde01ba414e801db4538063991e57cf046e63c51511ae6f86b1a01fc.oga'); -- filenode.id 3
 
+-- The address the Instance is reached on, which is the one it redirects to:
+-- the Nginx port, not the port this program listens on.
+INSERT INTO instances (scheme, host, port, title)
+VALUES ('http', 'localhost', 80, 'WorksKeeper'); -- instance.id 1
+
+INSERT INTO collections (instance_id) VALUES (1); -- collection.id 1
+
 -- Root series for the only collection
-INSERT INTO series (title, created_at) VALUES ('Series #1 (root)', NOW());          -- series.id 1, listing_id NULL
+INSERT INTO series (collection_id, title, created_at)
+VALUES (1, 'Series #1 (root)', NOW());       -- series.id 1
 
--- Nested series
-INSERT INTO series (title, created_at) VALUES ('Series #2 (nested)', NOW());        -- series.id 2
-
+-- A nested Series fills a Listing, and the CHECK on series rules out filling
+-- one after the fact, so the Listing is inserted first.
 INSERT INTO listings (parent_series_id, position, listing_type)
 VALUES (1, 1.0, 'series'); -- listing.id 1: Series #2 under Series #1
 
-UPDATE series SET listing_id = 1 WHERE id = 2;
+INSERT INTO series (listing_id, title, created_at)
+VALUES (1, 'Series #2 (nested)', NOW());     -- series.id 2
 
 -- Another series in the same collection
-INSERT INTO series (title, created_at) VALUES ('Series #3', NOW());                 -- series.id 3
-
 INSERT INTO listings (parent_series_id, position, listing_type)
 VALUES (1, 2.0, 'series'); -- listing.id 2: Series #3 under Series #1
 
-UPDATE series SET listing_id = 2 WHERE id = 3;
+INSERT INTO series (listing_id, title, created_at)
+VALUES (2, 'Series #3', NOW());              -- series.id 3
 
 -- Works
 INSERT INTO listings (parent_series_id, position, listing_type)
@@ -268,9 +294,6 @@ INSERT INTO canvases (work_id) VALUES (2); -- canvas.id 2
 INSERT INTO groups (canvas_id) VALUES (1); -- group.id 1: root group for Work #1
 
 INSERT INTO groups (canvas_id) VALUES (2); -- group.id 2: root group for Work #2
-
--- Single collection
-INSERT INTO collections (root_series_id) VALUES (1);
 
 -- Canvas #1 contents: a nested group + a top-level text
 

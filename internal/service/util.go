@@ -10,13 +10,82 @@ import (
 )
 
 // *
+// * INSTANCE INSTANCE INSTANCE
+// *
+// MustGetOrInsertInstance resolves the Instance this process is configured for.
+// It may only create one when no Instance exists at all, so that a mistyped host
+// fails at startup instead of quietly standing up a second, empty site.
+func MustGetOrInsertInstance(ctx context.Context, args *repository.InstanceArguments, repos *repository.RepositoryCollection) repository.Instance {
+	configured, err := repos.InstanceRepo.GetOptionalInstanceByHostAndPort(ctx, args.Host, args.Port)
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error getting Instance")
+	}
+
+	if configured != nil {
+		return *configured
+	}
+
+	existing, err := repos.InstanceRepo.GetOptionalInstanceOrderByIdAscending(ctx)
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error getting Instance")
+	}
+
+	if existing != nil {
+		panic("configured Instance does not exist")
+	}
+
+	tx := repos.MustBegin(ctx)
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback(context.WithoutCancel(ctx))
+			log.Println(r)
+			panic("unexpected error inserting new Instance; rolled back")
+		}
+	}()
+
+	templateInstance := mustInsertNewTemplateInstance(ctx, tx, args, repos)
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Println(err)
+		panic("unexpected error committing new Instance")
+	}
+
+	return *templateInstance.Instance
+}
+
+func mustInsertNewTemplateInstance(ctx context.Context, tx pgx.Tx, args *repository.InstanceArguments, repos *repository.RepositoryCollection) *frontend.TemplateInstance {
+	instance, err := repos.InstanceRepo.InsertInstanceTx(ctx, tx, args)
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error inserting new Instance")
+	}
+
+	templateCollection := mustInsertNewTemplateCollection(ctx, tx, instance.Id, repos)
+
+	return &frontend.TemplateInstance{
+		Instance:           &instance,
+		TemplateCollection: templateCollection, // keep the subtree we already built
+	}
+}
+
+// The Instance is resolved once at startup, so the caller already holds the row
+// and nothing has to be fetched here.
+func buildTemplateInstanceShallow(instance *repository.Instance) *frontend.TemplateInstance {
+	return &frontend.TemplateInstance{
+		Instance:           instance,
+		TemplateCollection: nil,
+	}
+}
+
+// *
 // * COLLECTION COLLECTION COLLECTION
 // *
-func mustInsertNewTemplateCollection(ctx context.Context, tx pgx.Tx, repos *repository.RepositoryCollection) *frontend.TemplateCollection {
-	rootSeries := mustInsertNewTemplateSeries(ctx, tx, nil, repos)
-
+func mustInsertNewTemplateCollection(ctx context.Context, tx pgx.Tx, instanceId int64, repos *repository.RepositoryCollection) *frontend.TemplateCollection {
 	collection, err := repos.CollectionRepo.InsertCollectionTx(ctx, tx, &repository.CollectionArguments{
-		RootSeriesId: rootSeries.Series.Id,
+		InstanceId: instanceId,
 	})
 
 	if err != nil {
@@ -24,23 +93,28 @@ func mustInsertNewTemplateCollection(ctx context.Context, tx pgx.Tx, repos *repo
 		panic("unexpected error inserting new Collection")
 	}
 
+	templateSeries := mustInsertNewRootTemplateSeries(ctx, tx, collection.Id, repos)
+
 	return &frontend.TemplateCollection{
 		Collection:     &collection,
-		TemplateSeries: rootSeries, // keep what we built, don't discard it
+		TemplateSeries: templateSeries, // keep what we built, don't discard it
 	}
 }
 
-func mustBuildTemplateCollectionShallow(ctx context.Context, collectionId int64, repos *repository.RepositoryCollection) *frontend.TemplateCollection {
-	collection, err := repos.CollectionRepo.GetOneCollectionById(ctx, collectionId)
+func mustAttachTemplateCollection(ctx context.Context, ti *frontend.TemplateInstance, repos *repository.RepositoryCollection) *frontend.TemplateCollection {
+	collection, err := repos.CollectionRepo.GetOneCollectionByInstanceId(ctx, ti.Instance.Id)
 	if err != nil {
 		log.Println(err)
 		panic("unexpected error getting Collection")
 	}
 
-	return &frontend.TemplateCollection{
+	templateCollection := &frontend.TemplateCollection{
 		Collection:     &collection,
 		TemplateSeries: nil,
 	}
+
+	ti.TemplateCollection = templateCollection
+	return templateCollection
 }
 
 // *
@@ -53,8 +127,7 @@ func mustInsertNewTemplateSeriesListing(ctx context.Context, tx pgx.Tx, parentSe
 		panic("unexpected error inserting new Listing")
 	}
 
-	listingId := listing.Id
-	templateSeries := mustInsertNewTemplateSeries(ctx, tx, &listingId, repos)
+	templateSeries := mustInsertNewNestedTemplateSeries(ctx, tx, listing.Id, repos)
 
 	return &frontend.TemplateListing{
 		Listing:              &listing,
@@ -62,9 +135,12 @@ func mustInsertNewTemplateSeriesListing(ctx context.Context, tx pgx.Tx, parentSe
 	}
 }
 
-func mustInsertNewTemplateSeries(ctx context.Context, tx pgx.Tx, listingId *int64, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
+// A Series's parent is either a Collection (root) or a Listing (nested), never
+// both and never neither — mirroring the CHECK constraint on the series table.
+func mustInsertNewRootTemplateSeries(ctx context.Context, tx pgx.Tx, collectionId int64, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
 	series, err := repos.SeriesRepo.InsertSeriesTx(ctx, tx, &repository.SeriesArguments{
-		ListingId: listingId,
+		CollectionId: &collectionId,
+		ListingId:    nil,
 	})
 
 	if err != nil {
@@ -78,8 +154,36 @@ func mustInsertNewTemplateSeries(ctx context.Context, tx pgx.Tx, listingId *int6
 	}
 }
 
+func mustInsertNewNestedTemplateSeries(ctx context.Context, tx pgx.Tx, listingId int64, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
+	series, err := repos.SeriesRepo.InsertSeriesTx(ctx, tx, &repository.SeriesArguments{
+		CollectionId: nil,
+		ListingId:    &listingId,
+	})
+
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error inserting new Series")
+	}
+
+	return &frontend.TemplateSeries{
+		Series:           &series,
+		TemplateListings: nil, // no children required to be valid
+	}
+}
+
+// Only root Series carry a collection_id, so this attaches the Collection's root Series.
 func mustAttachTemplateSeries(ctx context.Context, tc *frontend.TemplateCollection, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
-	templateSeries := mustBuildTemplateSeriesShallow(ctx, tc.Collection.RootSeriesId, repos)
+	series, err := repos.SeriesRepo.GetOneSeriesByCollectionId(ctx, tc.Collection.Id)
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error getting Series")
+	}
+
+	templateSeries := &frontend.TemplateSeries{
+		Series:           &series,
+		TemplateListings: nil,
+	}
+
 	tc.TemplateSeries = templateSeries
 	return templateSeries
 }
