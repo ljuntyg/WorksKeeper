@@ -1,4 +1,6 @@
 <!-- TemplateWork is passed in -->
 <h1>{{ $.Work.Title }}</h1>
 
-{{ $.TemplateCanvas.ToHtml }}
+{{ range $.TemplateContents }}
+{{ .ToHtml }}
+{{ end }}

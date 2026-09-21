@@ -8,8 +8,8 @@ import (
 )
 
 type TemplateWork struct {
-	Work           *repository.Work
-	TemplateCanvas Templatable
+	Work             *repository.Work
+	TemplateContents []Templatable
 }
 
 func (tw *TemplateWork) GetNumberingUrlString() string {

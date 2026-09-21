@@ -17,6 +17,26 @@
             view work
           </button>
 
+          <menu>
+            <li>
+              <button type="submit" name="action" value="add-work-text:{{ $.TemplateWork.Work.Id }}">
+                & new text
+              </button>
+            </li>
+
+            <li>
+              <button type="submit" name="action" value="add-work-media:{{ $.TemplateWork.Work.Id }}">
+                & new media
+              </button>
+            </li>
+
+            <li>
+              <button type="submit" name="action" value="add-work-group:{{ $.TemplateWork.Work.Id }}">
+                & new group
+              </button>
+            </li>
+          </menu>
+
           <input type="hidden" name="editing" value="true">
           {{ else }}
           <button type="submit" name="action" value="edit-work:">
@@ -29,7 +49,7 @@
         </fieldset>
       </aside>
 
-      <main class="canvas-container">
+      <main>
         {{ if eq $.IsEditing true }}
         {{ $.TemplateWork.ToEditableHtml }}
         {{ else }}

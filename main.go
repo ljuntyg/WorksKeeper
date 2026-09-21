@@ -28,19 +28,14 @@ func main() {
 		os.Getenv("PGPORT"),
 	)
 
-	canvasRepo := &repository.CanvasRepository{}
-	captionRepo := &repository.CaptionRepository{}
-	collectionRepo := &repository.CollectionRepository{}
 	contentRepo := &repository.ContentRepository{}
 	fileRepo := &repository.FileRepository{}
-	filenameRepo := &repository.FilenameRepository{}
 	filenodeRepo := &repository.FilenodeRepository{}
 	fileserverRepo := &repository.FileserverRepository{}
 	groupRepo := &repository.GroupRepository{}
 	instanceRepo := &repository.InstanceRepository{}
 	listingRepo := &repository.ListingRepository{}
 	mediaRepo := &repository.MediaRepository{}
-	sourceRepo := &repository.SourceRepository{}
 	textRepo := &repository.TextRepository{}
 	workRepo := &repository.WorkRepository{}
 	seriesRepo := &repository.SeriesRepository{}
@@ -48,12 +43,8 @@ func main() {
 	repoCollection := &repository.RepositoryCollection{}
 	repoCollection.Init(
 		pgxPool,
-		canvasRepo,
-		captionRepo,
-		collectionRepo,
 		contentRepo,
 		fileRepo,
-		filenameRepo,
 		filenodeRepo,
 		fileserverRepo,
 		groupRepo,
@@ -61,7 +52,6 @@ func main() {
 		listingRepo,
 		mediaRepo,
 		seriesRepo,
-		sourceRepo,
 		textRepo,
 		workRepo)
 

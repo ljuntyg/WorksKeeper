@@ -3,4 +3,6 @@
   <textarea name="title-text">{{ $.Work.Title }}</textarea>
 </h1>
 
-{{ $.TemplateCanvas.ToEditableHtml }}
+{{ range $.TemplateContents }}
+{{ .ToEditableHtml }}
+{{ end }}

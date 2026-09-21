@@ -4,6 +4,10 @@ import (
 	"WorksKeeper/internal/repository"
 	"fmt"
 	"html/template"
+	"net"
+	"net/url"
+	"path"
+	"strconv"
 )
 
 // MediaType is the kind of html element a file has to be rendered in.
@@ -62,48 +66,56 @@ var MimeToMediaFormat = map[string]MediaFormat{
 }
 
 type TemplateMedia struct {
-	Media           *repository.Media
-	TemplateSources []Templatable
-	TemplateCaption Templatable
+	Media      *repository.Media
+	File       *repository.File
+	Filenode   *repository.Filenode
+	Fileserver *repository.Fileserver
 }
 
 // GetMediaKind is the kind of html element this Media has to be rendered in.
-// It is decided by the first Source, because a Media renders as a single
-// element that all of its Sources are alternative encodings for.
 func (tm *TemplateMedia) GetMediaKind() MediaType {
-	templateSource := tm.firstTemplateSource()
-	if templateSource == nil {
+	if tm.File == nil {
 		return MediaEmptyType
 	}
 
-	return templateSource.GetMediaKind()
+	mediaFormat, found := MimeToMediaFormat[tm.File.MimeType]
+	if !found {
+		return MediaEmptyType
+	}
+
+	return mediaFormat.MediaType
 }
 
-// GetFallbackLink is the url of the first Source. A picture element needs an
-// img element as the fallback its source elements are alternatives to.
-func (tm *TemplateMedia) GetFallbackLink() string {
-	templateSource := tm.firstTemplateSource()
-	if templateSource == nil {
+func (tm *TemplateMedia) GetLink() string {
+	if tm.Filenode == nil || tm.Fileserver == nil {
 		return ""
 	}
 
-	return templateSource.GetLink()
+	link := url.URL{
+		Scheme: tm.Fileserver.Scheme,
+		Host:   tm.getHost(),
+		Path:   path.Join(tm.Fileserver.UrlPath, tm.Filenode.Path),
+	}
+
+	return link.String()
 }
 
-// firstTemplateSource narrows the first Source to its concrete type, which the
-// templates cannot do themselves; a method that is not part of Templatable
-// cannot be called on an element of TemplateSources from a template.
-func (tm *TemplateMedia) firstTemplateSource() *TemplateSource {
-	if len(tm.TemplateSources) == 0 {
-		return nil
+func (tm *TemplateMedia) GetMimeType() string {
+	if tm.File == nil {
+		return ""
 	}
 
-	templateSource, ok := tm.TemplateSources[0].(*TemplateSource)
-	if !ok {
-		return nil
+	return tm.File.MimeType
+}
+
+func (tm *TemplateMedia) getHost() string {
+	port := int(tm.Fileserver.Port)
+	if (tm.Fileserver.Scheme == "http" && port == 80) ||
+		(tm.Fileserver.Scheme == "https" && port == 443) {
+		return tm.Fileserver.Host
 	}
 
-	return templateSource
+	return net.JoinHostPort(tm.Fileserver.Host, strconv.Itoa(port))
 }
 
 func (tm *TemplateMedia) GetName(prefix string) string {

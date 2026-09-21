@@ -18,9 +18,10 @@ func (hs *HomeService) Init(repos *repository.RepositoryCollection, instance *re
 
 func (hs *HomeService) GetTemplateData(ctx context.Context) template.Executable {
 	templateInstance := buildTemplateInstanceShallow(hs.instance)
-	templateCollection := mustAttachTemplateCollection(ctx, templateInstance, hs.repos)
-	templateSeries := mustAttachTemplateSeries(ctx, templateCollection, hs.repos)
-	mustAttachTemplateListings(ctx, templateSeries, hs.repos)
+	templateListings := mustAttachTemplateInstanceListings(ctx, templateInstance, hs.repos)
+	for _, templateListing := range templateListings {
+		mustFillTemplateListing(ctx, templateListing, hs.repos)
+	}
 
 	return &template.HomeData{
 		TemplateInstance: templateInstance,

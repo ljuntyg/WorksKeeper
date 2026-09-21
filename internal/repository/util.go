@@ -14,12 +14,8 @@ import (
 
 type RepositoryCollection struct {
 	pgxPool        *pgxpool.Pool
-	CanvasRepo     *CanvasRepository
-	CaptionRepo    *CaptionRepository
-	CollectionRepo *CollectionRepository
 	ContentRepo    *ContentRepository
 	FileRepo       *FileRepository
-	FilenameRepo   *FilenameRepository
 	FilenodeRepo   *FilenodeRepository
 	FileserverRepo *FileserverRepository
 	GroupRepo      *GroupRepository
@@ -27,19 +23,14 @@ type RepositoryCollection struct {
 	ListingRepo    *ListingRepository
 	MediaRepo      *MediaRepository
 	SeriesRepo     *SeriesRepository
-	SourceRepo     *SourceRepository
 	TextRepo       *TextRepository
 	WorkRepo       *WorkRepository
 }
 
 func (rc *RepositoryCollection) Init(
 	pgxPool *pgxpool.Pool,
-	canvasRepo *CanvasRepository,
-	captionRepo *CaptionRepository,
-	collectionRepo *CollectionRepository,
 	contentRepo *ContentRepository,
 	fileRepo *FileRepository,
-	filenameRepo *FilenameRepository,
 	filenodeRepo *FilenodeRepository,
 	fileserverRepo *FileserverRepository,
 	groupRepo *GroupRepository,
@@ -47,29 +38,16 @@ func (rc *RepositoryCollection) Init(
 	listingRepo *ListingRepository,
 	mediaRepo *MediaRepository,
 	seriesRepo *SeriesRepository,
-	sourceRepo *SourceRepository,
 	textRepo *TextRepository,
 	workRepo *WorkRepository,
 ) {
 	rc.pgxPool = pgxPool
-
-	rc.CanvasRepo = canvasRepo
-	canvasRepo.init(pgxPool)
-
-	rc.CaptionRepo = captionRepo
-	captionRepo.init(pgxPool)
-
-	rc.CollectionRepo = collectionRepo
-	collectionRepo.init(pgxPool)
 
 	rc.ContentRepo = contentRepo
 	contentRepo.init(pgxPool)
 
 	rc.FileRepo = fileRepo
 	fileRepo.init(pgxPool)
-
-	rc.FilenameRepo = filenameRepo
-	filenameRepo.init(pgxPool)
 
 	rc.FilenodeRepo = filenodeRepo
 	filenodeRepo.init(pgxPool)
@@ -91,9 +69,6 @@ func (rc *RepositoryCollection) Init(
 
 	rc.SeriesRepo = seriesRepo
 	seriesRepo.init(pgxPool)
-
-	rc.SourceRepo = sourceRepo
-	sourceRepo.init(pgxPool)
 
 	rc.TextRepo = textRepo
 	textRepo.init(pgxPool)

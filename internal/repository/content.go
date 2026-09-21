@@ -12,19 +12,22 @@ import (
 
 type Content struct {
 	Id            int64          `db:"id"`
-	ParentGroupId int64          `db:"parent_group_id"`
+	WorkId        *int64         `db:"work_id"`
+	ParentGroupId *int64         `db:"parent_group_id"`
 	Position      pgtype.Numeric `db:"position"`
 	ContentType   string         `db:"content_type"`
 }
 
 type ContentArguments struct {
-	ParentGroupId int64
+	WorkId        *int64
+	ParentGroupId *int64
 	Position      pgtype.Numeric
 	ContentType   string
 }
 
 func (ca *ContentArguments) GetNamedArgs() pgx.NamedArgs {
 	return pgx.NamedArgs{
+		"work_id":         ca.WorkId,
 		"parent_group_id": ca.ParentGroupId,
 		"position":        ca.Position,
 		"content_type":    ca.ContentType,
@@ -48,6 +51,16 @@ func (cr *ContentRepository) InsertContentTx(ctx context.Context, tx pgx.Tx, arg
 	return insertIntoTable[Content](ctx, tx, "contents", args.GetNamedArgs())
 }
 
+func (cr *ContentRepository) GetContentsByWorkIdOrderByPositionAscending(ctx context.Context, workId int64) ([]Content, error) {
+	return selectFromTableWhere[Content](ctx, cr.pgxPool, "contents",
+		map[string]any{"work_id": workId}, nil, &orderBy{column: "position", direction: Ascending}, nil)
+}
+
+func (cr *ContentRepository) GetContentsByWorkIdOrderByPositionAscendingTx(ctx context.Context, tx pgx.Tx, workId int64) ([]Content, error) {
+	return selectFromTableWhere[Content](ctx, tx, "contents",
+		map[string]any{"work_id": workId}, nil, &orderBy{column: "position", direction: Ascending}, nil)
+}
+
 func (cr *ContentRepository) GetContentsByParentGroupIdOrderByPositionAscending(ctx context.Context, parentGroupId int64) ([]Content, error) {
 	return selectFromTableWhere[Content](ctx, cr.pgxPool, "contents",
 		map[string]any{"parent_group_id": parentGroupId}, nil,
@@ -59,11 +72,24 @@ func (cr *ContentRepository) GetContentsByParentGroupIdOrderByPositionAscendingT
 		map[string]any{"parent_group_id": parentGroupId}, nil, &orderBy{column: "position", direction: Ascending}, nil)
 }
 
+// AppendContentToWorkTx inserts a root Content at the end of its Work.
+func (cr *ContentRepository) AppendContentToWorkTx(ctx context.Context, tx pgx.Tx, workId int64, contentType string) (Content, error) {
+	return insertIntoTableAppendPosition[Content](ctx, tx, "contents",
+		pgx.NamedArgs{
+			"work_id":         workId,
+			"parent_group_id": nil,
+			"content_type":    contentType,
+		},
+		"position", "work_id", workId,
+	)
+}
+
 // AppendContentToGroupTx inserts a Content at the end of its parent Group,
 // computing the next position rather than taking one.
 func (cr *ContentRepository) AppendContentToGroupTx(ctx context.Context, tx pgx.Tx, parentGroupId int64, contentType string) (Content, error) {
 	return insertIntoTableAppendPosition[Content](ctx, tx, "contents",
 		pgx.NamedArgs{
+			"work_id":         nil,
 			"parent_group_id": parentGroupId,
 			"content_type":    contentType,
 		},
@@ -72,20 +98,21 @@ func (cr *ContentRepository) AppendContentToGroupTx(ctx context.Context, tx pgx.
 }
 
 // IncreaseContentPositionTx moves the content to a position between its next
-// sibling and the sibling after that (by parent_group_id, position). If the
+// sibling and the sibling after that (by work_id/parent_group_id, position). If the
 // next sibling is the last one, it's moved to next.position + 1. Returns
 // nil, nil if contentId is already at the highest position in its group.
 func (cr *ContentRepository) IncreaseContentPositionTx(ctx context.Context, tx pgx.Tx, contentId int64) (*Content, error) {
 	const query = `
 	WITH current AS (
-		SELECT parent_group_id, position
+		SELECT work_id, parent_group_id, position
 		FROM contents
 		WHERE id = @content_id
 	),
 	next AS (
 		SELECT c.position
 		FROM contents c, current
-		WHERE c.parent_group_id = current.parent_group_id
+		WHERE c.work_id IS NOT DISTINCT FROM current.work_id
+		AND c.parent_group_id IS NOT DISTINCT FROM current.parent_group_id
 		AND c.position > current.position
 		ORDER BY c.position ASC
 		LIMIT 1
@@ -93,7 +120,8 @@ func (cr *ContentRepository) IncreaseContentPositionTx(ctx context.Context, tx p
 	next_next AS (
 		SELECT c.position
 		FROM contents c, current
-		WHERE c.parent_group_id = current.parent_group_id
+		WHERE c.work_id IS NOT DISTINCT FROM current.work_id
+		AND c.parent_group_id IS NOT DISTINCT FROM current.parent_group_id
 		AND c.position > (SELECT position FROM next)
 		ORDER BY c.position ASC
 		LIMIT 1
@@ -128,21 +156,22 @@ func (cr *ContentRepository) IncreaseContentPositionTx(ctx context.Context, tx p
 }
 
 // DecreaseContentPositionTx moves the content to a position between its
-// previous sibling and the sibling before that (by parent_group_id,
+// previous sibling and the sibling before that (by work_id/parent_group_id,
 // position). If the previous sibling is the first one, it's moved to
 // prev.position - 1. Returns nil, nil if contentId is already at the
 // lowest position in its group.
 func (cr *ContentRepository) DecreaseContentPositionTx(ctx context.Context, tx pgx.Tx, contentId int64) (*Content, error) {
 	const query = `
     WITH current AS (
-        SELECT parent_group_id, position
+		SELECT work_id, parent_group_id, position
         FROM contents
         WHERE id = @content_id
     ),
     prev AS (
         SELECT c.position
         FROM contents c, current
-        WHERE c.parent_group_id = current.parent_group_id
+		WHERE c.work_id IS NOT DISTINCT FROM current.work_id
+		AND c.parent_group_id IS NOT DISTINCT FROM current.parent_group_id
         AND c.position < current.position
         ORDER BY c.position DESC
         LIMIT 1
@@ -150,7 +179,8 @@ func (cr *ContentRepository) DecreaseContentPositionTx(ctx context.Context, tx p
     prev_prev AS (
         SELECT c.position
         FROM contents c, current
-        WHERE c.parent_group_id = current.parent_group_id
+		WHERE c.work_id IS NOT DISTINCT FROM current.work_id
+		AND c.parent_group_id IS NOT DISTINCT FROM current.parent_group_id
         AND c.position < (SELECT position FROM prev)
         ORDER BY c.position DESC
         LIMIT 1

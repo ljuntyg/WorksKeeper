@@ -41,6 +41,11 @@ func (fr *FileRepository) GetOneFileById(ctx context.Context, id int64) (File, e
 		map[string]any{"id": id}, nil, nil)
 }
 
+func (fr *FileRepository) GetOneFileByHash(ctx context.Context, hash string) (File, error) {
+	return selectExactlyOneFromTableWhere[File](ctx, fr.pgxPool, "files",
+		map[string]any{"hash": hash}, nil, nil)
+}
+
 // GetOptionalFileByHashAndSizeTx looks a File up by its contents, so that an
 // upload of bytes we already store reuses the File instead of adding a copy.
 func (fr *FileRepository) GetOptionalFileByHashAndSizeTx(ctx context.Context, tx pgx.Tx, hash string, size int64) (*File, error) {

@@ -7,8 +7,8 @@ import (
 )
 
 type TemplateInstance struct {
-	Instance           *repository.Instance
-	TemplateCollection Templatable
+	Instance         *repository.Instance
+	TemplateListings []Templatable
 }
 
 func (ti *TemplateInstance) GetName(prefix string) string {

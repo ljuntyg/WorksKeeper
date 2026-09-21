@@ -1,5 +1,5 @@
 <!-- TemplateMedia is passed in -->
-{{ if not $.TemplateSources }}
+{{ if not $.Media.FileHash }}
 <fieldset>
 	<legend>	
 		<input type="file" name="upload" />
@@ -17,39 +17,38 @@
 <figure>
   {{ if eq $.GetMediaKind "image" }}
 
-  <picture>
-		{{ range $.TemplateSources }}
-		{{ .ToEditableHtml }}
-		{{ end }}
-		<img src="{{ $.GetFallbackLink }}" alt="Image">
-	</picture>
+  <img src="{{ $.GetLink }}" alt="Image">
 
   {{ else if eq $.GetMediaKind "video" }}
 
   <video controls loop>
-		{{ range $.TemplateSources }}
-		{{ .ToEditableHtml }}
-		{{ end }}
+		<source src="{{ $.GetLink }}" type="{{ $.GetMimeType }}">
 		Your browser doesn't support this video.
 	</video>
 
   {{ else if eq $.GetMediaKind "sound" }}
 
   <audio controls loop>
-		{{ range $.TemplateSources }}
-		{{ .ToEditableHtml }}
-		{{ end }}
+		<source src="{{ $.GetLink }}" type="{{ $.GetMimeType }}">
 		Your browser doesn't support this audio.
 	</audio>
 
   {{ end }}
 
-  {{ if $.TemplateCaption }}
-  {{ $.TemplateCaption.ToEditableHtml }}
+  {{ if $.Media.Caption }}
+  <fieldset>
+	<legend>
+		<button type="submit" name="action" value="clear-media-caption:{{ $.Media.Id }}">
+			✕
+		</button>
+	</legend>
+
+	<textarea name="caption[{{ $.Media.Id }}]">{{ $.Media.Caption }}</textarea>
+  </fieldset>
   {{ else }}
   <menu>
     <li>
-      <button type="submit" name="action" value="add-caption:{{ $.Media.Id }}">
+			<button type="submit" name="action" value="set-media-caption:{{ $.Media.Id }}">
         & new caption
       </button>
     </li>

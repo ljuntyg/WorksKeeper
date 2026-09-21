@@ -1,2 +1,10 @@
 <!-- TemplateInstance is passed in -->
-{{ $.TemplateCollection.ToHtml }}
+<table>
+<tr>
+  <th>length</th>
+  <th>title</th>
+</tr>
+{{ range $.TemplateListings }}
+{{ .ToHtml }}
+{{ end }}
+</table>

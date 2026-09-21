@@ -2,34 +2,25 @@
 <figure>
   {{ if eq $.GetMediaKind "image" }}
 
-  <picture>
-		{{ range $.TemplateSources }}
-		{{ .ToHtml }}
-		{{ end }}
-		<img src="{{ $.GetFallbackLink }}" alt="Image">
-	</picture>
+  <img src="{{ $.GetLink }}" alt="Image">
 
   {{ else if eq $.GetMediaKind "video" }}
 
   <video controls loop>
-		{{ range $.TemplateSources }}
-		{{ .ToHtml }}
-		{{ end }}
+		<source src="{{ $.GetLink }}" type="{{ $.GetMimeType }}">
 		Your browser doesn't support this video.
 	</video>
 
   {{ else if eq $.GetMediaKind "sound" }}
 
   <audio controls loop>
-		{{ range $.TemplateSources }}
-		{{ .ToHtml }}
-		{{ end }}
+		<source src="{{ $.GetLink }}" type="{{ $.GetMimeType }}">
 		Your browser doesn't support this audio.
 	</audio>
 
   {{ end }}
 
-  {{ if $.TemplateCaption }}
-  {{ $.TemplateCaption.ToHtml }}
+	{{ with $.Media.Caption }}
+	<figcaption>{{ . }}</figcaption>
   {{ end }}
 </figure>

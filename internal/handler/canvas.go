@@ -83,6 +83,13 @@ func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		ch.handleAddText(rw, r, int64(groupId))
+	case "add-work-text":
+		workId, err := strconv.Atoi(value)
+		if err != nil {
+			panic("unexpected error getting Work id")
+		}
+
+		ch.handleAddTextToWork(rw, r, int64(workId))
 	case "add-media":
 		groupId, err := strconv.Atoi(value)
 		if err != nil {
@@ -90,6 +97,13 @@ func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		ch.handleAddMedia(rw, r, int64(groupId))
+	case "add-work-media":
+		workId, err := strconv.Atoi(value)
+		if err != nil {
+			panic("unexpected error getting Work id")
+		}
+
+		ch.handleAddMediaToWork(rw, r, int64(workId))
 	case "add-group":
 		groupId, err := strconv.Atoi(value)
 		if err != nil {
@@ -97,13 +111,20 @@ func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		ch.handleAddGroup(rw, r, int64(groupId))
-	case "add-caption":
+	case "add-work-group":
+		workId, err := strconv.Atoi(value)
+		if err != nil {
+			panic("unexpected error getting Work id")
+		}
+
+		ch.handleAddGroupToWork(rw, r, int64(workId))
+	case "set-media-caption":
 		mediaId, err := strconv.Atoi(value)
 		if err != nil {
 			panic("unexpected error getting Media id")
 		}
 
-		ch.handleAddCaption(rw, r, int64(mediaId))
+		ch.handleSetMediaCaption(rw, r, int64(mediaId))
 	case "content-increase-position":
 		contentId, err := strconv.Atoi(value)
 		if err != nil {
@@ -125,13 +146,13 @@ func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		ch.handleDeleteContent(rw, r, int64(contentId))
-	case "delete-caption":
-		captionId, err := strconv.Atoi(value)
+	case "clear-media-caption":
+		mediaId, err := strconv.Atoi(value)
 		if err != nil {
-			panic("unexpected error getting Caption id")
+			panic("unexpected error getting Media id")
 		}
 
-		ch.handleDeleteCaption(rw, r, int64(captionId))
+		ch.handleClearMediaCaption(rw, r, int64(mediaId))
 	case "upload":
 		mediaId, err := strconv.Atoi(value)
 		if err != nil {
@@ -143,7 +164,7 @@ func (ch *CanvasHandler) handlePost(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (ch *CanvasHandler) handleGetNew(rw http.ResponseWriter, r *http.Request) {
-	work := ch.canvasService.MustInsertNewWorkInBaseCollection(r.Context())
+	work := ch.canvasService.MustInsertNewWorkInInstance(r.Context())
 	http.Redirect(rw, r, "/compose"+work.GetNumberingUrlString(), http.StatusFound)
 }
 
@@ -162,8 +183,18 @@ func (ch *CanvasHandler) handleAddText(rw http.ResponseWriter, r *http.Request, 
 	ch.handleGet(rw, r, true)
 }
 
+func (ch *CanvasHandler) handleAddTextToWork(rw http.ResponseWriter, r *http.Request, workId int64) {
+	ch.canvasService.MustInsertNewTextInWork(r.Context(), workId)
+	ch.handleGet(rw, r, true)
+}
+
 func (ch *CanvasHandler) handleAddMedia(rw http.ResponseWriter, r *http.Request, groupId int64) {
 	ch.canvasService.MustInsertNewMediaInGroup(r.Context(), groupId)
+	ch.handleGet(rw, r, true)
+}
+
+func (ch *CanvasHandler) handleAddMediaToWork(rw http.ResponseWriter, r *http.Request, workId int64) {
+	ch.canvasService.MustInsertNewMediaInWork(r.Context(), workId)
 	ch.handleGet(rw, r, true)
 }
 
@@ -172,8 +203,13 @@ func (ch *CanvasHandler) handleAddGroup(rw http.ResponseWriter, r *http.Request,
 	ch.handleGet(rw, r, true)
 }
 
-func (ch *CanvasHandler) handleAddCaption(rw http.ResponseWriter, r *http.Request, mediaId int64) {
-	ch.canvasService.MustInsertNewCaptionInMedia(r.Context(), mediaId)
+func (ch *CanvasHandler) handleAddGroupToWork(rw http.ResponseWriter, r *http.Request, workId int64) {
+	ch.canvasService.MustInsertNewGroupInWork(r.Context(), workId)
+	ch.handleGet(rw, r, true)
+}
+
+func (ch *CanvasHandler) handleSetMediaCaption(rw http.ResponseWriter, r *http.Request, mediaId int64) {
+	ch.canvasService.MustSetMediaCaption(r.Context(), mediaId, "")
 	ch.handleGet(rw, r, true)
 }
 
@@ -192,8 +228,8 @@ func (ch *CanvasHandler) handleDeleteContent(rw http.ResponseWriter, r *http.Req
 	ch.handleGet(rw, r, true)
 }
 
-func (ch *CanvasHandler) handleDeleteCaption(rw http.ResponseWriter, r *http.Request, captionId int64) {
-	ch.canvasService.MustDeleteCaption(r.Context(), captionId)
+func (ch *CanvasHandler) handleClearMediaCaption(rw http.ResponseWriter, r *http.Request, mediaId int64) {
+	ch.canvasService.MustClearMediaCaption(r.Context(), mediaId)
 	ch.handleGet(rw, r, true)
 }
 

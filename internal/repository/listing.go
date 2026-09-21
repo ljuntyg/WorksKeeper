@@ -10,19 +10,22 @@ import (
 
 type Listing struct {
 	Id             int64          `db:"id"`
-	ParentSeriesId int64          `db:"parent_series_id"`
+	InstanceId     *int64         `db:"instance_id"`
+	ParentSeriesId *int64         `db:"parent_series_id"`
 	Position       pgtype.Numeric `db:"position"`
 	ListingType    string         `db:"listing_type"`
 }
 
 type ListingArguments struct {
-	ParentSeriesId int64
+	InstanceId     *int64
+	ParentSeriesId *int64
 	Position       pgtype.Numeric
 	ListingType    string
 }
 
 func (la *ListingArguments) GetNamedArgs() pgx.NamedArgs {
 	return pgx.NamedArgs{
+		"instance_id":      la.InstanceId,
 		"parent_series_id": la.ParentSeriesId,
 		"position":         la.Position,
 		"listing_type":     la.ListingType,
@@ -41,6 +44,16 @@ func (lr *ListingRepository) InsertListingTx(ctx context.Context, tx pgx.Tx, arg
 	return insertIntoTable[Listing](ctx, tx, "listings", args.GetNamedArgs())
 }
 
+func (lr *ListingRepository) GetListingsByInstanceIdOrderByPositionAscending(ctx context.Context, instanceId int64) ([]Listing, error) {
+	return selectFromTableWhere[Listing](ctx, lr.pgxPool, "listings",
+		map[string]any{"instance_id": instanceId}, nil, &orderBy{column: "position", direction: Ascending}, nil)
+}
+
+func (lr *ListingRepository) GetListingsByInstanceIdOrderByPositionAscendingTx(ctx context.Context, tx pgx.Tx, instanceId int64) ([]Listing, error) {
+	return selectFromTableWhere[Listing](ctx, tx, "listings",
+		map[string]any{"instance_id": instanceId}, nil, &orderBy{column: "position", direction: Ascending}, nil)
+}
+
 func (lr *ListingRepository) GetListingsByParentSeriesIdOrderByPositionAscending(ctx context.Context, parentSeriesId int64) ([]Listing, error) {
 	return selectFromTableWhere[Listing](ctx, lr.pgxPool, "listings",
 		map[string]any{"parent_series_id": parentSeriesId}, nil, &orderBy{column: "position", direction: Ascending}, nil)
@@ -51,11 +64,24 @@ func (lr *ListingRepository) GetListingsByParentSeriesIdOrderByPositionAscending
 		map[string]any{"parent_series_id": parentSeriesId}, nil, &orderBy{column: "position", direction: Ascending}, nil)
 }
 
+// AppendListingToInstanceTx inserts a root Listing at the end of its Instance.
+func (lr *ListingRepository) AppendListingToInstanceTx(ctx context.Context, tx pgx.Tx, instanceId int64, listingType string) (Listing, error) {
+	return insertIntoTableAppendPosition[Listing](ctx, tx, "listings",
+		pgx.NamedArgs{
+			"instance_id":      instanceId,
+			"parent_series_id": nil,
+			"listing_type":     listingType,
+		},
+		"position", "instance_id", instanceId,
+	)
+}
+
 // AppendListingToSeriesTx inserts a Listing at the end of its parent Series,
 // computing the next position rather than taking one.
 func (lr *ListingRepository) AppendListingToSeriesTx(ctx context.Context, tx pgx.Tx, parentSeriesId int64, listingType string) (Listing, error) {
 	return insertIntoTableAppendPosition[Listing](ctx, tx, "listings",
 		pgx.NamedArgs{
+			"instance_id":      nil,
 			"parent_series_id": parentSeriesId,
 			"listing_type":     listingType,
 		},

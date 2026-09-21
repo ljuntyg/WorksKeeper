@@ -1,9 +1,7 @@
 DROP TABLE IF EXISTS instances CASCADE;
-DROP TABLE IF EXISTS collections CASCADE;
 DROP TABLE IF EXISTS works CASCADE;
 DROP TABLE IF EXISTS series CASCADE;
 DROP TABLE IF EXISTS listings CASCADE;
-DROP TABLE IF EXISTS canvases CASCADE;
 DROP TABLE IF EXISTS groups CASCADE;
 DROP TABLE IF EXISTS contents CASCADE;
 DROP TABLE IF EXISTS texts CASCADE;
@@ -21,8 +19,6 @@ DROP TYPE IF EXISTS c_type CASCADE;
 CREATE TYPE l_type AS ENUM ('series', 'work');
 CREATE TYPE c_type AS ENUM ('group', 'text', 'media');
 
--- The deployment this database serves. Owns a Collection the way a Work owns a
--- Canvas, so that everything below it hangs off a single deletable row.
 CREATE TABLE instances (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
     scheme VARCHAR(8) NOT NULL,
@@ -33,10 +29,13 @@ CREATE TABLE instances (
     UNIQUE (host, port)
 );
 
-CREATE TABLE collections (
+CREATE TABLE listings (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    instance_id BIGINT UNIQUE NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    instance_id BIGINT,
+    parent_series_id BIGINT,
+    position NUMERIC NOT NULL,
+    listing_type L_TYPE NOT NULL,
+    CHECK ((instance_id IS NULL) <> (parent_series_id IS NULL))
 );
 
 CREATE TABLE works (
@@ -48,41 +47,24 @@ CREATE TABLE works (
 
 CREATE TABLE series (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    collection_id BIGINT UNIQUE,
-    listing_id BIGINT UNIQUE,
+    listing_id BIGINT UNIQUE NOT NULL,
     title VARCHAR(4096) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    CHECK ((collection_id IS NULL) <> (listing_id IS NULL))
-);
-
-CREATE TABLE listings (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    parent_series_id BIGINT NOT NULL,
-    position NUMERIC NOT NULL,
-    listing_type L_TYPE NOT NULL,
-    UNIQUE (parent_series_id, position)
-);
-
-CREATE TABLE canvases (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    work_id BIGINT UNIQUE NOT NULL,
-    last_edit TIMESTAMPTZ DEFAULT NOW() NOT NULL
-);
-
-CREATE TABLE groups (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    canvas_id BIGINT UNIQUE,
-    content_id BIGINT UNIQUE,
-    swap_direction BOOLEAN DEFAULT FALSE NOT NULL,
-    CHECK ((canvas_id IS NULL) <> (content_id IS NULL))
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
 CREATE TABLE contents (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    parent_group_id BIGINT NOT NULL,
+    work_id BIGINT,
+    parent_group_id BIGINT,
     position NUMERIC NOT NULL,
     content_type C_TYPE NOT NULL,
-    UNIQUE (parent_group_id, position)
+    CHECK ((work_id IS NULL) <> (parent_group_id IS NULL))
+);
+
+CREATE TABLE groups (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    content_id BIGINT UNIQUE NOT NULL,
+    swap_direction BOOLEAN DEFAULT FALSE NOT NULL
 );
 
 CREATE TABLE texts (
@@ -93,19 +75,9 @@ CREATE TABLE texts (
 
 CREATE TABLE media (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    content_id BIGINT UNIQUE NOT NULL
-);
-
-CREATE TABLE sources (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    media_id BIGINT NOT NULL,
-    filename_id BIGINT NOT NULL
-);
-
-CREATE TABLE captions (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    media_id BIGINT UNIQUE NOT NULL,
-    content VARCHAR(4194304)
+    content_id BIGINT UNIQUE NOT NULL,
+    file_hash VARCHAR(128),
+    caption VARCHAR(4194304)
 );
 
 CREATE TABLE fileservers (
@@ -121,9 +93,9 @@ CREATE TABLE fileservers (
 CREATE TABLE files (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
     size BIGINT NOT NULL,
-    hash VARCHAR(128) NOT NULL,
+    hash VARCHAR(128) UNIQUE NOT NULL,
     mime_type VARCHAR(255) NOT NULL,
-    UNIQUE (hash, size)
+    CHECK (size >= 0)
 );
 
 CREATE TABLE filenodes (
@@ -134,26 +106,29 @@ CREATE TABLE filenodes (
     UNIQUE (fileserver_id, path)
 );
 
-CREATE TABLE filenames (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
-    file_id BIGINT NOT NULL,
-    name VARCHAR(4096) NOT NULL,
-    UNIQUE (file_id, name)
-);
-
-CREATE INDEX sources_media_id_idx ON sources (media_id);
-CREATE INDEX sources_filename_id_idx ON sources (filename_id);
 CREATE INDEX filenodes_file_id_idx ON filenodes (file_id);
 CREATE INDEX filenodes_fileserver_id_idx ON filenodes (fileserver_id);
-CREATE INDEX filenames_file_id_idx ON filenames (file_id);
+CREATE INDEX media_file_hash_idx ON media (file_hash);
 
-ALTER TABLE collections
-ADD CONSTRAINT collections_instance_fk
+CREATE UNIQUE INDEX listings_instance_position_unique
+ON listings (instance_id, position)
+WHERE parent_series_id IS NULL;
+
+CREATE UNIQUE INDEX listings_parent_series_position_unique
+ON listings (parent_series_id, position)
+WHERE parent_series_id IS NOT NULL;
+
+CREATE UNIQUE INDEX contents_work_position_unique
+ON contents (work_id, position)
+WHERE parent_group_id IS NULL;
+
+CREATE UNIQUE INDEX contents_parent_group_position_unique
+ON contents (parent_group_id, position)
+WHERE parent_group_id IS NOT NULL;
+
+ALTER TABLE listings
+ADD CONSTRAINT listings_instance_fk
 FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE;
-
-ALTER TABLE series
-ADD CONSTRAINT series_collection_fk
-FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE;
 
 ALTER TABLE listings
 ADD CONSTRAINT listings_parent_series_fk
@@ -167,21 +142,17 @@ ALTER TABLE works
 ADD CONSTRAINT works_listing_fk
 FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 
-ALTER TABLE canvases
-ADD CONSTRAINT canvases_work_fk
+ALTER TABLE contents
+ADD CONSTRAINT contents_work_fk
 FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE;
-
-ALTER TABLE groups
-ADD CONSTRAINT groups_canvas_fk
-FOREIGN KEY (canvas_id) REFERENCES canvases(id) ON DELETE CASCADE;
-
-ALTER TABLE groups
-ADD CONSTRAINT groups_content_fk
-FOREIGN KEY (content_id) REFERENCES contents(id) ON DELETE CASCADE;
 
 ALTER TABLE contents
 ADD CONSTRAINT contents_parent_group_fk
 FOREIGN KEY (parent_group_id) REFERENCES groups(id) ON DELETE CASCADE;
+
+ALTER TABLE groups
+ADD CONSTRAINT groups_content_fk
+FOREIGN KEY (content_id) REFERENCES contents(id) ON DELETE CASCADE;
 
 ALTER TABLE texts
 ADD CONSTRAINT texts_content_fk
@@ -191,17 +162,9 @@ ALTER TABLE media
 ADD CONSTRAINT media_content_fk
 FOREIGN KEY (content_id) REFERENCES contents(id) ON DELETE CASCADE;
 
-ALTER TABLE sources
-ADD CONSTRAINT sources_media_fk
-FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE;
-
-ALTER TABLE captions
-ADD CONSTRAINT captions_media_fk
-FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE;
-
-ALTER TABLE sources
-ADD CONSTRAINT sources_filename_fk
-FOREIGN KEY (filename_id) REFERENCES filenames(id) ON DELETE RESTRICT;
+ALTER TABLE media
+ADD CONSTRAINT media_file_fk
+FOREIGN KEY (file_hash) REFERENCES files(hash) ON DELETE RESTRICT;
 
 ALTER TABLE filenodes
 ADD CONSTRAINT filenodes_file_fk
@@ -210,10 +173,6 @@ FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE;
 ALTER TABLE filenodes
 ADD CONSTRAINT filenodes_fileserver_fk
 FOREIGN KEY (fileserver_id) REFERENCES fileservers(id) ON DELETE CASCADE;
-
-ALTER TABLE filenames
-ADD CONSTRAINT filenames_file_fk
-FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE;
 
 -- ===== mock data =====
 
@@ -232,10 +191,6 @@ VALUES (35911, 'ef7b88411629d1983f2c5b4b78351e6f708f2b2105de30d37ebc917568d504d4
 INSERT INTO files (size, hash, mime_type)
 VALUES (3015647, '494664c7bde01ba414e801db4538063991e57cf046e63c51511ae6f86b1a01fc', 'audio/ogg'); -- file.id 3
 
-INSERT INTO filenames (file_id, name) VALUES (1, 'introsong.mp4'); -- filename.id 1
-INSERT INTO filenames (file_id, name) VALUES (2, 'plots.png');     -- filename.id 2
-INSERT INTO filenames (file_id, name) VALUES (3, 'test.ogg');      -- filename.id 3
-
 -- A path is relative to the objects directory of the Fileserver, and is the
 -- digest of the file sharded over two directories, under the extension its
 -- MIME type is stored as.
@@ -253,33 +208,25 @@ VALUES (3, 1, '49/46/494664c7bde01ba414e801db4538063991e57cf046e63c51511ae6f86b1
 INSERT INTO instances (scheme, host, port, title)
 VALUES ('http', 'localhost', 80, 'WorksKeeper'); -- instance.id 1
 
-INSERT INTO collections (instance_id) VALUES (1); -- collection.id 1
-
--- Root series for the only collection
-INSERT INTO series (collection_id, title, created_at)
-VALUES (1, 'Series #1 (root)', NOW());       -- series.id 1
-
--- A nested Series fills a Listing, and the CHECK on series rules out filling
--- one after the fact, so the Listing is inserted first.
-INSERT INTO listings (parent_series_id, position, listing_type)
-VALUES (1, 1.0, 'series'); -- listing.id 1: Series #2 under Series #1
+-- Top-level Series belong directly to the Instance through their Listings.
+INSERT INTO listings (instance_id, parent_series_id, position, listing_type)
+VALUES (1, NULL, 1.0, 'series'); -- listing.id 1: Series #2
 
 INSERT INTO series (listing_id, title, created_at)
-VALUES (1, 'Series #2 (nested)', NOW());     -- series.id 2
+VALUES (1, 'Series #2', NOW()); -- series.id 1
 
--- Another series in the same collection
-INSERT INTO listings (parent_series_id, position, listing_type)
-VALUES (1, 2.0, 'series'); -- listing.id 2: Series #3 under Series #1
+INSERT INTO listings (instance_id, parent_series_id, position, listing_type)
+VALUES (1, NULL, 2.0, 'series'); -- listing.id 2: Series #3
 
 INSERT INTO series (listing_id, title, created_at)
-VALUES (2, 'Series #3', NOW());              -- series.id 3
+VALUES (2, 'Series #3', NOW()); -- series.id 2
 
 -- Works
-INSERT INTO listings (parent_series_id, position, listing_type)
-VALUES (2, 1.0, 'work');   -- listing.id 3: Work #1 under Series #2
+INSERT INTO listings (instance_id, parent_series_id, position, listing_type)
+VALUES (NULL, 1, 1.0, 'work'); -- listing.id 3: Work #1 under Series #2
 
-INSERT INTO listings (parent_series_id, position, listing_type)
-VALUES (1, 3.0, 'work');   -- listing.id 4: Work #2 under Series #1
+INSERT INTO listings (instance_id, parent_series_id, position, listing_type)
+VALUES (1, NULL, 3.0, 'work'); -- listing.id 4: Work #2 at the top level
 
 INSERT INTO works (listing_id, title)
 VALUES (3, 'Work #1 (nested)'); -- work.id 1
@@ -287,84 +234,57 @@ VALUES (3, 'Work #1 (nested)'); -- work.id 1
 INSERT INTO works (listing_id, title)
 VALUES (4, 'Work #2'); -- work.id 2
 
-INSERT INTO canvases (work_id) VALUES (1); -- canvas.id 1
+-- Work #1 contents: a top-level group + a top-level text
 
-INSERT INTO canvases (work_id) VALUES (2); -- canvas.id 2
+INSERT INTO contents (work_id, parent_group_id, position, content_type)
+VALUES (1, NULL, 1.0, 'group'); -- content.id 1
 
-INSERT INTO groups (canvas_id) VALUES (1); -- group.id 1: root group for Work #1
+INSERT INTO groups (content_id) VALUES (1); -- group.id 1
 
-INSERT INTO groups (canvas_id) VALUES (2); -- group.id 2: root group for Work #2
-
--- Canvas #1 contents: a nested group + a top-level text
-
-INSERT INTO contents (parent_group_id, position, content_type)
-VALUES (1, 1.0, 'group'); -- content.id 1
-
-INSERT INTO groups (content_id) VALUES (1); -- group.id 3
-
-INSERT INTO contents (parent_group_id, position, content_type)
-VALUES (1, 2.0, 'text'); -- content.id 2
+INSERT INTO contents (work_id, parent_group_id, position, content_type)
+VALUES (1, NULL, 2.0, 'text'); -- content.id 2
 
 INSERT INTO texts (content_id, content)
 VALUES (2, 'Text #2');
 
--- Inside nested group 3: a text, then a video with source + caption
+-- Inside Group #1: a text, then a video with a caption
 
-INSERT INTO contents (parent_group_id, position, content_type)
-VALUES (3, 1.0, 'text'); -- content.id 3
+INSERT INTO contents (work_id, parent_group_id, position, content_type)
+VALUES (NULL, 1, 1.0, 'text'); -- content.id 3
 
 INSERT INTO texts (content_id, content)
 VALUES (3, 'Text #1');
 
-INSERT INTO contents (parent_group_id, position, content_type)
-VALUES (3, 2.0, 'media'); -- content.id 4
+INSERT INTO contents (work_id, parent_group_id, position, content_type)
+VALUES (NULL, 1, 2.0, 'media'); -- content.id 4
 
-INSERT INTO media (content_id)
-VALUES (4); -- media.id 1
+INSERT INTO media (content_id, file_hash, caption)
+VALUES (4, '2ccae0bc65d10ced9dd9d2404a9f39fd4505180f447b44461bb7ebcb363f4aa1', 'Caption #1'); -- media.id 1
 
-INSERT INTO captions (media_id, content)
-VALUES (1, 'Caption #1');
+-- Work #2 contents: a single top-level text
 
-INSERT INTO sources (media_id, filename_id)
-VALUES (1, 1);
-
--- Canvas #2 contents: a single top-level text
-
-INSERT INTO contents (parent_group_id, position, content_type)
-VALUES (2, 1.0, 'text'); -- content.id 5
+INSERT INTO contents (work_id, parent_group_id, position, content_type)
+VALUES (2, NULL, 1.0, 'text'); -- content.id 5
 
 INSERT INTO texts (content_id, content)
 VALUES (5, 'Text #3');
 
 -- Series #3 contents: a Work exercising the image and sound Media branches
 
-INSERT INTO listings (parent_series_id, position, listing_type)
-VALUES (3, 1.0, 'work');   -- listing.id 5: Work #3 under Series #3
+INSERT INTO listings (instance_id, parent_series_id, position, listing_type)
+VALUES (NULL, 2, 1.0, 'work'); -- listing.id 5: Work #3 under Series #3
 
 INSERT INTO works (listing_id, title)
 VALUES (5, 'Work #3 (in Series #3)'); -- work.id 3
 
-INSERT INTO canvases (work_id) VALUES (3); -- canvas.id 3
+INSERT INTO contents (work_id, parent_group_id, position, content_type)
+VALUES (3, NULL, 1.0, 'media'); -- content.id 6
 
-INSERT INTO groups (canvas_id) VALUES (3); -- group.id 4: root group for Work #3
+INSERT INTO media (content_id, file_hash, caption)
+VALUES (6, 'ef7b88411629d1983f2c5b4b78351e6f708f2b2105de30d37ebc917568d504d4', 'Caption #2 (on an image)'); -- media.id 2
 
-INSERT INTO contents (parent_group_id, position, content_type)
-VALUES (4, 1.0, 'media'); -- content.id 6
+INSERT INTO contents (work_id, parent_group_id, position, content_type)
+VALUES (3, NULL, 2.0, 'media'); -- content.id 7
 
-INSERT INTO media (content_id)
-VALUES (6); -- media.id 2
-
-INSERT INTO sources (media_id, filename_id)
-VALUES (2, 2);
-
-INSERT INTO captions (media_id, content)
-VALUES (2, 'Caption #2 (on an image)');
-
-INSERT INTO contents (parent_group_id, position, content_type)
-VALUES (4, 2.0, 'media'); -- content.id 7
-
-INSERT INTO media (content_id)
-VALUES (7); -- media.id 3
-
-INSERT INTO sources (media_id, filename_id)
-VALUES (3, 3);
+INSERT INTO media (content_id, file_hash)
+VALUES (7, '494664c7bde01ba414e801db4538063991e57cf046e63c51511ae6f86b1a01fc'); -- media.id 3
