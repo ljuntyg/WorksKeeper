@@ -96,6 +96,20 @@ func mustAttachTemplateInstanceListings(ctx context.Context, ti *frontend.Templa
 // *
 // * SERIES SERIES SERIES
 // *
+func mustInsertNewTemplateSeriesListingInInstance(ctx context.Context, tx pgx.Tx, instanceId int64, repos *repository.RepositoryCollection) *frontend.TemplateListing {
+	listing, err := repos.ListingRepo.AppendListingToInstanceTx(ctx, tx, instanceId, "series")
+	if err != nil {
+		log.Println(err)
+		panic("unexpected error inserting new Listing")
+	}
+
+	templateSeries := mustInsertNewNestedTemplateSeries(ctx, tx, listing.Id, repos)
+	return &frontend.TemplateListing{
+		Listing:              &listing,
+		TemplateWorkOrSeries: templateSeries,
+	}
+}
+
 func mustInsertNewTemplateSeriesListing(ctx context.Context, tx pgx.Tx, parentSeriesId int64, repos *repository.RepositoryCollection) *frontend.TemplateListing {
 	listing, err := repos.ListingRepo.AppendListingToSeriesTx(ctx, tx, parentSeriesId, "series")
 	if err != nil {
@@ -114,6 +128,7 @@ func mustInsertNewTemplateSeriesListing(ctx context.Context, tx pgx.Tx, parentSe
 func mustInsertNewNestedTemplateSeries(ctx context.Context, tx pgx.Tx, listingId int64, repos *repository.RepositoryCollection) *frontend.TemplateSeries {
 	series, err := repos.SeriesRepo.InsertSeriesTx(ctx, tx, &repository.SeriesArguments{
 		ListingId: listingId,
+		Title:     "Untitled Series",
 	})
 
 	if err != nil {

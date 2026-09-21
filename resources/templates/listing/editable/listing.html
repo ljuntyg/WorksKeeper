@@ -1,1 +1,19 @@
-<p>editable/listing.html TODO</p>
+<!-- TemplateListing is passed in -->
+<fieldset>
+  <legend>
+    <button type="submit" name="action" value="delete-listing:{{ $.Listing.Id }}">
+      ✕
+    </button>
+
+    <button type="submit" name="action" value="listing-decrease-position:{{ $.Listing.Id }}">
+      -
+    </button>
+
+    <button type="submit" name="action" value="listing-increase-position:{{ $.Listing.Id }}">
+      +
+    </button>
+  </legend>
+
+  {{ $.TemplateWorkOrSeries.GetTimeRequiredString }}
+  <a href="/compose/{{ $.TemplateWorkOrSeries.GetNumberingUrlString }}">{{ $.TemplateWorkOrSeries.GetTitle }}</a>
+</fieldset>

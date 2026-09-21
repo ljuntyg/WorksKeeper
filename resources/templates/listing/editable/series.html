@@ -1,1 +1,4 @@
-<p>editable/series.html TODO</p>
+<!-- TemplateSeries is passed in -->
+{{ range $.TemplateListings }}
+{{ .ToEditableHtml }}
+{{ end }}

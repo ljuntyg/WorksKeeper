@@ -68,8 +68,8 @@ func main() {
 		Title:  os.Getenv("INSTANCE_TITLE"),
 	}, repoCollection)
 
-	canvasService := &service.CanvasService{}
-	canvasService.Init(repoCollection, &instance)
+	editWorkService := &service.EditWorkService{}
+	editWorkService.Init(repoCollection, &instance)
 
 	homeService := &service.HomeService{}
 	homeService.Init(repoCollection, &instance)
@@ -77,17 +77,23 @@ func main() {
 	seriesService := &service.SeriesService{}
 	seriesService.Init(repoCollection)
 
+	editSeriesService := &service.EditSeriesService{}
+	editSeriesService.Init(repoCollection, &instance)
+
 	workService := &service.WorkService{}
 	workService.Init(repoCollection)
 
-	canvasHandler := &handler.CanvasHandler{}
-	canvasHandler.Init(canvasService)
+	editWorkHandler := &handler.EditWorkHandler{}
+	editWorkHandler.Init(editWorkService)
 
 	homeHandler := &handler.HomeHandler{}
 	homeHandler.Init(homeService)
 
 	seriesHandler := &handler.SeriesHandler{}
 	seriesHandler.Init(seriesService)
+
+	editSeriesHandler := &handler.EditSeriesHandler{}
+	editSeriesHandler.Init(editSeriesService)
 
 	workHandler := &handler.WorkHandler{}
 	workHandler.Init(workService)
@@ -99,8 +105,10 @@ func main() {
 	mux.HandleFunc("/works", homeHandler.HandleRequest)
 	mux.HandleFunc("/work/{numbering}", workHandler.HandleRequest)
 	mux.HandleFunc("/series/{numbering}", seriesHandler.HandleRequest)
-	mux.HandleFunc("/compose/work/{numbering}", canvasHandler.HandleRequest)
-	mux.HandleFunc("/compose/work", canvasHandler.HandleRequestNew)
+	mux.HandleFunc("/compose/work/{numbering}", editWorkHandler.HandleRequest)
+	mux.HandleFunc("/compose/work", editWorkHandler.HandleRequestNew)
+	mux.HandleFunc("/compose/series/{numbering}", editSeriesHandler.HandleRequest)
+	mux.HandleFunc("/compose/series", editSeriesHandler.HandleRequestNew)
 
 	/* mux.HandleFunc("/works", viewWorksHandler)
 

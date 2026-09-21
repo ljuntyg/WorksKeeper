@@ -1,4 +1,5 @@
 <!-- TemplateInstance is passed in -->
+{{ if $.TemplateListings }}
 <table>
 <tr>
   <th>length</th>
@@ -8,3 +9,4 @@
 {{ .ToHtml }}
 {{ end }}
 </table>
+{{ end }}

@@ -18,27 +18,27 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-type CanvasService struct {
+type EditWorkService struct {
 	repos    *repository.RepositoryCollection
 	instance *repository.Instance
 }
 
-func (cs *CanvasService) Init(repos *repository.RepositoryCollection, instance *repository.Instance) {
+func (cs *EditWorkService) Init(repos *repository.RepositoryCollection, instance *repository.Instance) {
 	cs.repos = repos
 	cs.instance = instance
 }
 
-func (cs *CanvasService) GetTemplateData(ctx context.Context, workId int64, editing bool) template.Executable {
+func (cs *EditWorkService) GetTemplateData(ctx context.Context, workId int64, editing bool) template.Executable {
 	templateWork := mustBuildTemplateWorkShallow(ctx, workId, cs.repos)
 	mustFillTemplateWork(ctx, templateWork, cs.repos)
 
-	return &template.CanvasData{
+	return &template.EditWorkData{
 		TemplateWork: templateWork,
 		IsEditing:    editing,
 	}
 }
 
-func (cs *CanvasService) MustInsertNewWorkInInstance(ctx context.Context) *frontend.TemplateWork {
+func (cs *EditWorkService) MustInsertNewWorkInInstance(ctx context.Context) *frontend.TemplateWork {
 	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
@@ -58,7 +58,7 @@ func (cs *CanvasService) MustInsertNewWorkInInstance(ctx context.Context) *front
 	return templateListing.TemplateWorkOrSeries.(*frontend.TemplateWork)
 }
 
-func (cs *CanvasService) MustInsertNewTextInWork(ctx context.Context, workId int64) *frontend.TemplateText {
+func (cs *EditWorkService) MustInsertNewTextInWork(ctx context.Context, workId int64) *frontend.TemplateText {
 	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
@@ -78,7 +78,7 @@ func (cs *CanvasService) MustInsertNewTextInWork(ctx context.Context, workId int
 	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateText)
 }
 
-func (cs *CanvasService) MustInsertNewMediaInWork(ctx context.Context, workId int64) *frontend.TemplateMedia {
+func (cs *EditWorkService) MustInsertNewMediaInWork(ctx context.Context, workId int64) *frontend.TemplateMedia {
 	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
@@ -98,7 +98,7 @@ func (cs *CanvasService) MustInsertNewMediaInWork(ctx context.Context, workId in
 	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateMedia)
 }
 
-func (cs *CanvasService) MustInsertNewGroupInWork(ctx context.Context, workId int64) *frontend.TemplateGroup {
+func (cs *EditWorkService) MustInsertNewGroupInWork(ctx context.Context, workId int64) *frontend.TemplateGroup {
 	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
@@ -118,7 +118,7 @@ func (cs *CanvasService) MustInsertNewGroupInWork(ctx context.Context, workId in
 	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateGroup)
 }
 
-func (cs *CanvasService) MustInsertNewTextInGroup(ctx context.Context, groupId int64) *frontend.TemplateText {
+func (cs *EditWorkService) MustInsertNewTextInGroup(ctx context.Context, groupId int64) *frontend.TemplateText {
 	tx := cs.repos.MustBegin(ctx)
 
 	defer func() {
@@ -139,7 +139,7 @@ func (cs *CanvasService) MustInsertNewTextInGroup(ctx context.Context, groupId i
 	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateText)
 }
 
-func (cs *CanvasService) MustInsertNewMediaInGroup(ctx context.Context, groupId int64) *frontend.TemplateMedia {
+func (cs *EditWorkService) MustInsertNewMediaInGroup(ctx context.Context, groupId int64) *frontend.TemplateMedia {
 	tx := cs.repos.MustBegin(ctx)
 
 	defer func() {
@@ -160,7 +160,7 @@ func (cs *CanvasService) MustInsertNewMediaInGroup(ctx context.Context, groupId 
 	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateMedia)
 }
 
-func (cs *CanvasService) MustInsertNewGroupInGroup(ctx context.Context, groupId int64) *frontend.TemplateGroup {
+func (cs *EditWorkService) MustInsertNewGroupInGroup(ctx context.Context, groupId int64) *frontend.TemplateGroup {
 	tx := cs.repos.MustBegin(ctx)
 
 	defer func() {
@@ -181,7 +181,7 @@ func (cs *CanvasService) MustInsertNewGroupInGroup(ctx context.Context, groupId 
 	return templateContent.TemplateGroupOrTextOrMedia.(*frontend.TemplateGroup)
 }
 
-func (cs *CanvasService) MustSetMediaCaption(ctx context.Context, mediaId int64, caption string) {
+func (cs *EditWorkService) MustSetMediaCaption(ctx context.Context, mediaId int64, caption string) {
 	tx := cs.repos.MustBegin(ctx)
 
 	defer func() {
@@ -203,7 +203,7 @@ func (cs *CanvasService) MustSetMediaCaption(ctx context.Context, mediaId int64,
 	}
 }
 
-func (cs *CanvasService) MustIncreaseContentPosition(ctx context.Context, contentId int64) {
+func (cs *EditWorkService) MustIncreaseContentPosition(ctx context.Context, contentId int64) {
 	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
@@ -224,7 +224,7 @@ func (cs *CanvasService) MustIncreaseContentPosition(ctx context.Context, conten
 	}
 }
 
-func (cs *CanvasService) MustDecreaseContentPosition(ctx context.Context, contentId int64) {
+func (cs *EditWorkService) MustDecreaseContentPosition(ctx context.Context, contentId int64) {
 	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
@@ -245,7 +245,7 @@ func (cs *CanvasService) MustDecreaseContentPosition(ctx context.Context, conten
 	}
 }
 
-func (cs *CanvasService) MustDeleteContent(ctx context.Context, contentId int64) {
+func (cs *EditWorkService) MustDeleteContent(ctx context.Context, contentId int64) {
 	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
@@ -266,7 +266,7 @@ func (cs *CanvasService) MustDeleteContent(ctx context.Context, contentId int64)
 	}
 }
 
-func (cs *CanvasService) MustClearMediaCaption(ctx context.Context, mediaId int64) {
+func (cs *EditWorkService) MustClearMediaCaption(ctx context.Context, mediaId int64) {
 	tx := cs.repos.MustBegin(ctx)
 	defer func() {
 		if r := recover(); r != nil {
@@ -287,13 +287,13 @@ func (cs *CanvasService) MustClearMediaCaption(ctx context.Context, mediaId int6
 	}
 }
 
-type CanvasEdits struct {
+type EditWorkEdits struct {
 	Title           *string
 	TextContents    map[int64]string
 	CaptionContents map[int64]string
 }
 
-func (cs *CanvasService) MustSaveCanvasEdits(ctx context.Context, workId int64, edits *CanvasEdits) {
+func (cs *EditWorkService) MustSaveEditWorkEdits(ctx context.Context, workId int64, edits *EditWorkEdits) {
 	if edits.Title == nil && len(edits.TextContents) == 0 && len(edits.CaptionContents) == 0 {
 		return
 	}
@@ -303,7 +303,7 @@ func (cs *CanvasService) MustSaveCanvasEdits(ctx context.Context, workId int64, 
 		if r := recover(); r != nil {
 			tx.Rollback(context.WithoutCancel(ctx))
 			log.Println(r)
-			panic("unexpected error saving Canvas edits; rolled back")
+			panic("unexpected error saving Work edits; rolled back")
 		}
 	}()
 
@@ -330,11 +330,11 @@ func (cs *CanvasService) MustSaveCanvasEdits(ctx context.Context, workId int64, 
 
 	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
-		panic("unexpected error saving Canvas edits")
+		panic("unexpected error saving Work edits")
 	}
 }
 
-func (cs *CanvasService) MustUploadMedia(ctx context.Context, mediaId int64, r *http.Request) {
+func (cs *EditWorkService) MustUploadMedia(ctx context.Context, mediaId int64, r *http.Request) {
 	fileserver, err := cs.repos.FileserverRepo.GetOneFileserverOrderByIdAscending(ctx)
 	if err != nil {
 		log.Println(err)

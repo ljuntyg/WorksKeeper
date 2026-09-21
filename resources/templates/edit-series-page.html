@@ -1,0 +1,91 @@
+<!-- EditSeriesData is passed in -->
+<!doctype html>
+<html>
+  <!-- <head>
+    <link rel="stylesheet" href="/static/series.css">
+    <link rel="stylesheet" href="/static/style.css">
+  </head> -->
+
+  <body>
+    <form method="post">
+      <aside>
+        <fieldset>
+          {{ if eq $.IsEditing true }}
+          <button type="submit" name="action" value="view-series:">
+            view series
+          </button>
+
+          <menu>
+            <li>
+              <button type="submit" name="action" value="add-series-work:{{ $.TemplateSeries.Series.Id }}">
+                & new work
+              </button>
+            </li>
+
+            <li>
+              <button type="submit" name="action" value="add-series-series:{{ $.TemplateSeries.Series.Id }}">
+                & new series
+              </button>
+            </li>
+          </menu>
+
+          <input type="hidden" name="editing" value="true">
+          {{ else }}
+          <button type="submit" name="action" value="edit-series:">
+            compose series
+          </button>
+
+          <input type="hidden" name="editing" value="false">
+          {{ end }}
+        </fieldset>
+      </aside>
+
+      <main>
+        {{ if eq $.IsEditing true }}
+        <h1>
+          <textarea name="title-text">{{ $.TemplateSeries.GetTitle }}</textarea>
+        </h1>
+
+        {{ $.TemplateSeries.ToEditableHtml }}
+        {{ else }}
+        <h1>{{ $.TemplateSeries.GetTitle }}</h1>
+
+        {{ $.TemplateSeries.ToHtml }}
+        {{ end }}
+      </main>
+    </form>
+
+    <script>
+      document.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData(e.target);
+
+        const submitter = e.submitter;
+        if (submitter && submitter.name) {
+          formData.append(submitter.name, submitter.value);
+        }
+        
+        try {
+          const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (response.ok) {
+            const html = await response.text();
+            const scrollY = window.scrollY;
+            document.open();
+            document.write(html);
+            document.close();
+            window.scrollTo(0, scrollY);
+          } else {
+            console.error('Form submission failed:', response.status);
+          }
+        } catch (error) {
+          console.error('Error submitting form:', error);
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -56,3 +56,8 @@ func (sr *SeriesRepository) GetOneSeriesByListingId(ctx context.Context, listing
 	return selectExactlyOneFromTableWhere[Series](ctx, sr.pgxPool, "series",
 		map[string]any{"listing_id": listingId}, nil, nil)
 }
+
+func (sr *SeriesRepository) UpdateSeriesSetTitleByIdTx(ctx context.Context, tx pgx.Tx, seriesId int64, title string) (Series, error) {
+	return updateExactlyOneTableWhere[Series](ctx, tx, "series",
+		map[string]any{"title": title}, map[string]any{"id": seriesId}, nil)
+}
